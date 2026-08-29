@@ -1,11 +1,11 @@
 if not bit32 then
     bit32 = {
-        band  = function(a, b) return a & b end,
-        bor   = function(a, b) return a | b end,
-        bxor  = function(a, b) return a ~ b end,
+        band   = function(a, b) return a & b end,
+        bor    = function(a, b) return a | b end,
+        bxor   = function(a, b) return a ~ b end,
         rshift = function(a, b) return a >> b end,
         lshift = function(a, b) return a << b end,
-        bnot  = function(a)    return ~a end,
+        bnot   = function(a)    return ~a end,
     }
 end
 if not getfenv then
@@ -14,19 +14,26 @@ end
 if not string.unpack then
     string.unpack = function() return 0, 1 end
 end
-local Players         = game:GetService("Players")
+
+local Players          = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
-local TweenService    = game:GetService("TweenService")
-local LocalPlayer     = Players.LocalPlayer
+local TweenService     = game:GetService("TweenService")
+local LocalPlayer      = Players.LocalPlayer
+
 local Speed    = 500
 local MinSpeed = 1
 local MaxSpeed = 950
 local Enabled  = false
+
+-- ScreenGui Setup (Safe Parent)
 local Gui = Instance.new("ScreenGui")
 Gui.Name           = "NexusHubSpeed"
 Gui.ResetOnSpawn   = false
 Gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-Gui.Parent         = LocalPlayer:WaitForChild("PlayerGui")
+
+local ParentTarget = (gethui and gethui()) or (syn and syn.protect_gui and game:GetService("CoreGui")) or LocalPlayer:WaitForChild("PlayerGui")
+Gui.Parent = ParentTarget
+
 local Main = Instance.new("Frame")
 Main.Name               = "Main"
 Main.Size               = UDim2.fromOffset(310, 200)
@@ -35,9 +42,11 @@ Main.BackgroundColor3   = Color3.fromRGB(12, 12, 22)
 Main.BorderSizePixel    = 0
 Main.ClipsDescendants   = true
 Main.Parent             = Gui
+
 local MainCorner = Instance.new("UICorner")
 MainCorner.CornerRadius = UDim.new(0, 16)
 MainCorner.Parent       = Main
+
 local BG = Instance.new("UIGradient")
 BG.Color = ColorSequence.new({
     ColorSequenceKeypoint.new(0, Color3.fromRGB(18, 12, 35)),
@@ -45,18 +54,21 @@ BG.Color = ColorSequence.new({
 })
 BG.Rotation = 135
 BG.Parent   = Main
+
 local Stroke = Instance.new("UIStroke")
 Stroke.Color           = Color3.fromRGB(120, 80, 255)
 Stroke.Thickness       = 1.5
 Stroke.Transparency    = 0.15
 Stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 Stroke.Parent          = Main
+
 local Header = Instance.new("Frame")
 Header.Name                = "Header"
 Header.Size                = UDim2.new(1, 0, 0, 46)
 Header.BackgroundTransparency = 1
 Header.BorderSizePixel     = 0
 Header.Parent              = Main
+
 local HGrad = Instance.new("UIGradient")
 HGrad.Color = ColorSequence.new({
     ColorSequenceKeypoint.new(0,   Color3.fromRGB(90,  40, 200)),
@@ -65,6 +77,7 @@ HGrad.Color = ColorSequence.new({
 })
 HGrad.Rotation = 90
 HGrad.Parent   = Header
+
 local LogoBox = Instance.new("Frame")
 LogoBox.Size                = UDim2.fromOffset(28, 28)
 LogoBox.Position            = UDim2.fromOffset(12, 9)
@@ -72,9 +85,11 @@ LogoBox.BackgroundColor3    = Color3.fromRGB(255, 255, 255)
 LogoBox.BackgroundTransparency = 0.75
 LogoBox.BorderSizePixel     = 0
 LogoBox.Parent              = Header
+
 local LogoCorner = Instance.new("UICorner")
 LogoCorner.CornerRadius = UDim.new(0, 7)
 LogoCorner.Parent       = LogoBox
+
 local LogoText = Instance.new("TextLabel")
 LogoText.Size               = UDim2.new(1, 0, 1, 0)
 LogoText.BackgroundTransparency = 1
@@ -84,6 +99,7 @@ LogoText.TextSize           = 16
 LogoText.Font               = Enum.Font.GothamBlack
 LogoText.TextXAlignment     = Enum.TextXAlignment.Center
 LogoText.Parent             = LogoBox
+
 local Title = Instance.new("TextLabel")
 Title.Size               = UDim2.new(1, -100, 0, 46)
 Title.Position           = UDim2.fromOffset(48, 0)
@@ -95,6 +111,7 @@ Title.Font               = Enum.Font.GothamBlack
 Title.TextXAlignment     = Enum.TextXAlignment.Left
 Title.TextYAlignment     = Enum.TextYAlignment.Center
 Title.Parent             = Header
+
 local Badge = Instance.new("TextLabel")
 Badge.Size               = UDim2.fromOffset(52, 15)
 Badge.Position           = UDim2.new(0, 48, 0, 29)
@@ -106,9 +123,11 @@ Badge.TextSize           = 9
 Badge.Font               = Enum.Font.GothamBold
 Badge.TextXAlignment     = Enum.TextXAlignment.Center
 Badge.Parent             = Header
+
 local BadgeCorner = Instance.new("UICorner")
 BadgeCorner.CornerRadius = UDim.new(0, 4)
 BadgeCorner.Parent       = Badge
+
 local Close = Instance.new("TextButton")
 Close.Size               = UDim2.fromOffset(28, 28)
 Close.Position           = UDim2.new(1, -40, 0, 9)
@@ -120,9 +139,11 @@ Close.TextSize           = 15
 Close.Font               = Enum.Font.GothamBlack
 Close.AutoButtonColor    = false
 Close.Parent             = Header
+
 local CloseCorner = Instance.new("UICorner")
 CloseCorner.CornerRadius = UDim.new(0, 8)
 CloseCorner.Parent       = Close
+
 local MinBtn = Instance.new("TextButton")
 MinBtn.Size               = UDim2.fromOffset(28, 28)
 MinBtn.Position           = UDim2.new(1, -74, 0, 9)
@@ -134,9 +155,11 @@ MinBtn.TextSize           = 18
 MinBtn.Font               = Enum.Font.GothamBlack
 MinBtn.AutoButtonColor    = false
 MinBtn.Parent             = Header
+
 local MinCorner = Instance.new("UICorner")
 MinCorner.CornerRadius = UDim.new(0, 8)
 MinCorner.Parent       = MinBtn
+
 local Sep = Instance.new("Frame")
 Sep.Size             = UDim2.new(1, 0, 0, 1)
 Sep.Position         = UDim2.fromOffset(0, 46)
@@ -144,17 +167,20 @@ Sep.BackgroundColor3 = Color3.fromRGB(120, 80, 255)
 Sep.BackgroundTransparency = 0.6
 Sep.BorderSizePixel  = 0
 Sep.Parent           = Main
+
 local Content = Instance.new("Frame")
 Content.Size                = UDim2.new(1, 0, 1, -47)
 Content.Position            = UDim2.fromOffset(0, 47)
 Content.BackgroundTransparency = 1
 Content.BorderSizePixel     = 0
 Content.Parent              = Main
+
 local SpeedRow = Instance.new("Frame")
 SpeedRow.Size               = UDim2.new(1, -40, 0, 28)
 SpeedRow.Position           = UDim2.fromOffset(20, 12)
 SpeedRow.BackgroundTransparency = 1
 SpeedRow.Parent             = Content
+
 local SpeedLabel = Instance.new("TextLabel")
 SpeedLabel.Size             = UDim2.new(1, -65, 1, 0)
 SpeedLabel.BackgroundTransparency = 1
@@ -164,6 +190,7 @@ SpeedLabel.TextSize         = 13
 SpeedLabel.Font             = Enum.Font.Gotham
 SpeedLabel.TextXAlignment   = Enum.TextXAlignment.Left
 SpeedLabel.Parent           = SpeedRow
+
 local SpeedNum = Instance.new("TextLabel")
 SpeedNum.Size               = UDim2.fromOffset(65, 28)
 SpeedNum.Position           = UDim2.new(1, -65, 0, 0)
@@ -173,6 +200,7 @@ SpeedNum.TextSize           = 20
 SpeedNum.Font               = Enum.Font.GothamBlack
 SpeedNum.TextXAlignment     = Enum.TextXAlignment.Right
 SpeedNum.Parent             = SpeedRow
+
 local SliderTrack = Instance.new("Frame")
 SliderTrack.Name            = "Slider"
 SliderTrack.Size            = UDim2.new(1, -40, 0, 6)
@@ -180,22 +208,27 @@ SliderTrack.Position        = UDim2.fromOffset(20, 54)
 SliderTrack.BackgroundColor3 = Color3.fromRGB(40, 35, 65)
 SliderTrack.BorderSizePixel = 0
 SliderTrack.Parent          = Content
+
 local SliderCorner = Instance.new("UICorner")
 SliderCorner.CornerRadius = UDim.new(1, 0)
 SliderCorner.Parent       = SliderTrack
+
 local Fill = Instance.new("Frame")
 Fill.BackgroundColor3 = Color3.fromRGB(120, 80, 255)
 Fill.BorderSizePixel  = 0
 Fill.Parent           = SliderTrack
+
 local FillCorner = Instance.new("UICorner")
 FillCorner.CornerRadius = UDim.new(1, 0)
 FillCorner.Parent       = Fill
+
 local FillGrad = Instance.new("UIGradient")
 FillGrad.Color = ColorSequence.new({
     ColorSequenceKeypoint.new(0, Color3.fromRGB(100, 60, 220)),
     ColorSequenceKeypoint.new(1, Color3.fromRGB(80, 160, 255)),
 })
 FillGrad.Parent = Fill
+
 local Knob = Instance.new("TextButton")
 Knob.Size             = UDim2.fromOffset(20, 20)
 Knob.AnchorPoint      = Vector2.new(0.5, 0.5)
@@ -204,9 +237,11 @@ Knob.Text             = ""
 Knob.AutoButtonColor  = false
 Knob.ZIndex           = 5
 Knob.Parent           = SliderTrack
+
 local KnobCorner = Instance.new("UICorner")
 KnobCorner.CornerRadius = UDim.new(1, 0)
 KnobCorner.Parent       = Knob
+
 local KnobDot = Instance.new("Frame")
 KnobDot.Size             = UDim2.fromOffset(8, 8)
 KnobDot.AnchorPoint      = Vector2.new(0.5, 0.5)
@@ -215,9 +250,11 @@ KnobDot.BackgroundColor3 = Color3.fromRGB(120, 80, 255)
 KnobDot.BorderSizePixel  = 0
 KnobDot.ZIndex           = 6
 KnobDot.Parent           = Knob
+
 local KnobDotCorner = Instance.new("UICorner")
 KnobDotCorner.CornerRadius = UDim.new(1, 0)
 KnobDotCorner.Parent       = KnobDot
+
 local LabelMin = Instance.new("TextLabel")
 LabelMin.Size               = UDim2.fromOffset(30, 14)
 LabelMin.Position           = UDim2.fromOffset(20, 64)
@@ -228,6 +265,7 @@ LabelMin.TextSize           = 10
 LabelMin.Font               = Enum.Font.Gotham
 LabelMin.TextXAlignment     = Enum.TextXAlignment.Left
 LabelMin.Parent             = Content
+
 local LabelMax = Instance.new("TextLabel")
 LabelMax.Size               = UDim2.fromOffset(40, 14)
 LabelMax.Position           = UDim2.new(1, -60, 0, 64)
@@ -238,6 +276,7 @@ LabelMax.TextSize           = 10
 LabelMax.Font               = Enum.Font.Gotham
 LabelMax.TextXAlignment     = Enum.TextXAlignment.Right
 LabelMax.Parent             = Content
+
 local UseButton = Instance.new("TextButton")
 UseButton.Size             = UDim2.new(1, -40, 0, 42)
 UseButton.Position         = UDim2.fromOffset(20, 90)
@@ -246,9 +285,11 @@ UseButton.Text             = ""
 UseButton.AutoButtonColor  = false
 UseButton.ZIndex           = 2
 UseButton.Parent           = Content
+
 local UseCorner = Instance.new("UICorner")
 UseCorner.CornerRadius = UDim.new(0, 12)
 UseCorner.Parent       = UseButton
+
 local BtnGrad = Instance.new("UIGradient")
 BtnGrad.Color = ColorSequence.new({
     ColorSequenceKeypoint.new(0, Color3.fromRGB(70, 50, 130)),
@@ -256,11 +297,13 @@ BtnGrad.Color = ColorSequence.new({
 })
 BtnGrad.Rotation = 90
 BtnGrad.Parent   = UseButton
+
 local BtnStroke = Instance.new("UIStroke")
 BtnStroke.Color       = Color3.fromRGB(120, 80, 255)
 BtnStroke.Thickness   = 1
 BtnStroke.Transparency = 0.5
 BtnStroke.Parent      = UseButton
+
 local BtnIcon = Instance.new("TextLabel")
 BtnIcon.Size             = UDim2.fromOffset(30, 42)
 BtnIcon.Position         = UDim2.fromOffset(14, 0)
@@ -271,6 +314,7 @@ BtnIcon.TextSize         = 18
 BtnIcon.Font             = Enum.Font.GothamBlack
 BtnIcon.ZIndex           = 3
 BtnIcon.Parent           = UseButton
+
 local BtnLabel = Instance.new("TextLabel")
 BtnLabel.Size             = UDim2.new(1, -50, 1, 0)
 BtnLabel.Position         = UDim2.fromOffset(42, 0)
@@ -282,6 +326,7 @@ BtnLabel.Font             = Enum.Font.GothamBold
 BtnLabel.TextXAlignment   = Enum.TextXAlignment.Left
 BtnLabel.ZIndex           = 3
 BtnLabel.Parent           = UseButton
+
 local BtnStatus = Instance.new("TextLabel")
 BtnStatus.Size             = UDim2.fromOffset(40, 20)
 BtnStatus.Position         = UDim2.new(1, -50, 0.5, -10)
@@ -292,75 +337,103 @@ BtnStatus.TextSize         = 10
 BtnStatus.Font             = Enum.Font.GothamBold
 BtnStatus.ZIndex           = 3
 BtnStatus.Parent           = UseButton
+
 local StatusCorner = Instance.new("UICorner")
 StatusCorner.CornerRadius = UDim.new(0, 5)
 StatusCorner.Parent       = BtnStatus
-local OpenButton = Instance.new("ImageButton")
+
+local OpenButton = Instance.new("TextButton")
 OpenButton.Size             = UDim2.fromOffset(52, 52)
 OpenButton.Position         = UDim2.fromOffset(20, 200)
 OpenButton.BackgroundColor3 = Color3.fromRGB(80, 45, 200)
-OpenButton.Image            = "https://s.imgz.io/2026/08/28/c8db47f8e7d87ad6c69184d13b48233f476d187af036c133.jpg"
-OpenButton.ScaleType        = Enum.ScaleType.Crop
+OpenButton.Text             = "NEXUS"
+OpenButton.TextColor3       = Color3.fromRGB(255, 255, 255)
+OpenButton.Font             = Enum.Font.GothamBold
+OpenButton.TextSize         = 12
 OpenButton.Visible          = false
 OpenButton.Parent           = Gui
+
 local OpenCorner = Instance.new("UICorner")
 OpenCorner.CornerRadius = UDim.new(1, 0)
 OpenCorner.Parent       = OpenButton
+
 local OpenStroke = Instance.new("UIStroke")
 OpenStroke.Color       = Color3.fromRGB(120, 80, 255)
 OpenStroke.Thickness   = 2
 OpenStroke.Transparency = 0.2
 OpenStroke.Parent      = OpenButton
+
+-- Fixed Core Functions
 local function ApplySpeed()
     local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
     local Humanoid  = Character:FindFirstChildOfClass("Humanoid")
     if Humanoid then
-        Humanoid:Destroy()
-        task.wait(0.05)
+        Humanoid.WalkSpeed = Speed
     end
-    local NewHumanoid = Instance.new("Humanoid")
-    NewHumanoid.Parent    = Character
-    NewHumanoid.WalkSpeed = Speed
 end
-local function ChangeCurrentSpeed()
+
+local function ResetSpeed()
     local Character = LocalPlayer.Character
-    if not Character then return end
-    local Humanoid = Character:FindFirstChildOfClass("Humanoid")
-    if Humanoid then Humanoid.WalkSpeed = Speed end
+    if Character then
+        local Humanoid = Character:FindFirstChildOfClass("Humanoid")
+        if Humanoid then
+            Humanoid.WalkSpeed = 16
+        end
+    end
 end
+
+-- Continuous Speed Loop (Prevents Game Anti-Cheats from Resetting Speed)
+task.spawn(function()
+    while task.wait(0.1) do
+        if Enabled then
+            ApplySpeed()
+        end
+    end
+end)
+
 local Sliding = false
 local function UpdateSlider(X)
     local Start   = SliderTrack.AbsolutePosition.X
     local Width   = SliderTrack.AbsoluteSize.X
+    if Width <= 0 then return end
     local Percent = math.clamp((X - Start) / Width, 0, 1)
     Speed         = math.floor(MinSpeed + ((MaxSpeed - MinSpeed) * Percent))
     SpeedNum.Text = tostring(Speed)
     Fill.Size     = UDim2.new(Percent, 0, 1, 0)
     Knob.Position = UDim2.new(Percent, 0, 0.5, 0)
-    if Enabled then ChangeCurrentSpeed() end
+    if Enabled then ApplySpeed() end
 end
+
+-- Support both Mouse and Mobile Touch Inputs
+local function IsValidInput(input)
+    return input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch
+end
+
 SliderTrack.InputBegan:Connect(function(Input)
-    if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+    if IsValidInput(Input) then
         Sliding = true
         UpdateSlider(Input.Position.X)
     end
 end)
+
 Knob.InputBegan:Connect(function(Input)
-    if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+    if IsValidInput(Input) then
         Sliding = true
     end
 end)
+
 UserInputService.InputChanged:Connect(function(Input)
-    if Sliding and Input.UserInputType == Enum.UserInputType.MouseMovement then
+    if Sliding and (Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch) then
         UpdateSlider(Input.Position.X)
     end
 end)
+
 UserInputService.InputEnded:Connect(function(Input)
-    if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+    if IsValidInput(Input) then
         Sliding  = false
-        Dragging = false
     end
 end)
+
 UseButton.MouseButton1Click:Connect(function()
     Enabled = not Enabled
     if Enabled then
@@ -390,29 +463,32 @@ UseButton.MouseButton1Click:Connect(function()
             ColorSequenceKeypoint.new(1, Color3.fromRGB(50, 35, 95)),
         })
         BtnStroke.Color = Color3.fromRGB(120, 80, 255)
-        local Character = LocalPlayer.Character
-        local Humanoid  = Character and Character:FindFirstChildOfClass("Humanoid")
-        if Humanoid then Humanoid.WalkSpeed = 16 end
+        ResetSpeed()
     end
 end)
+
 LocalPlayer.CharacterAdded:Connect(function()
     if Enabled then
-        task.wait(0.2)
+        task.wait(0.5)
         ApplySpeed()
     end
 end)
-local Dragging     = false
-local DragStart    = nil
-local StartPos     = nil
+
+-- Window Dragging (Fixed for PC & Mobile)
+local Dragging  = false
+local DragStart = nil
+local StartPos  = nil
+
 Header.InputBegan:Connect(function(Input)
-    if Input.UserInputType == Enum.UserInputType.MouseButton1 then
+    if IsValidInput(Input) then
         Dragging  = true
         DragStart = Input.Position
         StartPos  = Main.Position
     end
 end)
+
 UserInputService.InputChanged:Connect(function(Input)
-    if Dragging and Input.UserInputType == Enum.UserInputType.MouseMovement then
+    if Dragging and (Input.UserInputType == Enum.UserInputType.MouseMovement or Input.UserInputType == Enum.UserInputType.Touch) then
         local Delta = Input.Position - DragStart
         Main.Position = UDim2.new(
             StartPos.X.Scale, StartPos.X.Offset + Delta.X,
@@ -420,6 +496,13 @@ UserInputService.InputChanged:Connect(function(Input)
         )
     end
 end)
+
+UserInputService.InputEnded:Connect(function(Input)
+    if IsValidInput(Input) then
+        Dragging = false
+    end
+end)
+
 Close.MouseButton1Click:Connect(function()
     TweenService:Create(Main, TweenInfo.new(0.15, Enum.EasingStyle.Quad), {
         Size = UDim2.fromOffset(310, 0),
@@ -431,10 +514,12 @@ Close.MouseButton1Click:Connect(function()
     Main.BackgroundTransparency = 0
     OpenButton.Visible        = true
 end)
+
 OpenButton.MouseButton1Click:Connect(function()
     Main.Visible       = true
     OpenButton.Visible = false
 end)
+
 local minimized = false
 MinBtn.MouseButton1Click:Connect(function()
     minimized = not minimized
@@ -448,6 +533,8 @@ MinBtn.MouseButton1Click:Connect(function()
         MinBtn.Text  = "-"
     end
 end)
+
+-- Initial Slider Setup
 local InitPercent = (Speed - MinSpeed) / (MaxSpeed - MinSpeed)
 SpeedNum.Text = tostring(Speed)
 Fill.Size     = UDim2.new(InitPercent, 0, 1, 0)
