@@ -1,0 +1,1609 @@
+if getgenv and getgenv().MAHIRA_LOADED then
+    pcall(getgenv().MAHIRA_UNLOAD or function() end)
+end
+
+local Players       = game:GetService("Players")
+local RunService    = game:GetService("RunService")
+local UIS           = game:GetService("UserInputService")
+local TweenService  = game:GetService("TweenService")
+local RS            = game:GetService("ReplicatedStorage")
+local PPS           = game:GetService("ProximityPromptService")
+local VIM           = game:GetService("VirtualInputManager")
+local VirtualUser   = game:GetService("VirtualUser")
+local TeleportSvc   = game:GetService("TeleportService")
+local Stats         = game:GetService("Stats")
+
+local LP  = Players.LocalPlayer
+local cam = workspace.CurrentCamera
+
+local ACCENT   = Color3.fromRGB(226, 72, 132)
+local ACCENT_D = Color3.fromRGB(70, 28, 48)
+local BG       = Color3.fromRGB(13, 13, 17)
+local CARD     = Color3.fromRGB(22, 22, 28)
+local CARD2    = Color3.fromRGB(30, 30, 38)
+local LINE     = Color3.fromRGB(48, 48, 60)
+local TXT      = Color3.fromRGB(240, 240, 245)
+local SUB      = Color3.fromRGB(140, 140, 155)
+
+local S = {
+    ESP = {
+        Enabled = false, Highlight = true, Name = true, Dist = true,
+        Health = true, Team = false, Max = 1500, Down = true,
+    },
+    Player = {
+        Speed = 0, InfStamina = false, NoHunger = false, Noclip = false,
+        InfJump = false, AutoRespawn = false,
+    },
+    Farm = {
+        BlackJob = false, Tolerance = 7, Interact = false, Filter = "",
+        InteractRange = 14,
+    },
+    Keys = {
+        UI = Enum.KeyCode.RightShift,
+        Noclip = Enum.KeyCode.N,
+    },
+    AntiAFK = true,
+}
+
+local conns = {}
+local alive = true
+local function bind(sig, fn)
+    local c = sig:Connect(fn)
+    conns[#conns + 1] = c
+    return c
+end
+
+local function mk(cls, props, parent)
+    local o = Instance.new(cls)
+    for k, v in pairs(props or {}) do o[k] = v end
+    if parent then o.Parent = parent end
+    return o
+end
+local function corner(o, r) return mk("UICorner", { CornerRadius = UDim.new(0, r) }, o) end
+local function stroke(o, c, t, tr)
+    return mk("UIStroke", { Color = c, Thickness = t or 1, Transparency = tr or 0,
+        ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, o)
+end
+local function pad(o, l, t, r, b)
+    return mk("UIPadding", { PaddingLeft = UDim.new(0, l), PaddingTop = UDim.new(0, t),
+        PaddingRight = UDim.new(0, r or l), PaddingBottom = UDim.new(0, b or t) }, o)
+end
+local function list(o, gap, dir)
+    return mk("UIListLayout", { Padding = UDim.new(0, gap or 6), SortOrder = Enum.SortOrder.LayoutOrder,
+        FillDirection = dir or Enum.FillDirection.Vertical }, o)
+end
+local function text(parent, str, size, color, bold, xa)
+    return mk("TextLabel", {
+        BackgroundTransparency = 1, Text = str, TextSize = size or 12, TextColor3 = color or TXT,
+        Font = bold and Enum.Font.GothamBold or Enum.Font.Gotham,
+        TextXAlignment = xa or Enum.TextXAlignment.Left, Size = UDim2.new(1, 0, 0, (size or 12) + 4),
+        TextTruncate = Enum.TextTruncate.AtEnd,
+    }, parent)
+end
+local function tween(o, t, props)
+    TweenService:Create(o, TweenInfo.new(t, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), props):Play()
+end
+
+local function ipart(parent, x, y, w, h, o)
+    o = o or {}
+    local f = mk("Frame", { BackgroundTransparency = 1, BorderSizePixel = 0, AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(x, y), Size = UDim2.fromScale(w, h), Rotation = o.rot or 0 }, parent)
+    if o.r then mk("UICorner", { CornerRadius = UDim.new(o.r, 0) }, f) end
+    if o.fill then
+        f.BackgroundTransparency = 0; f:SetAttribute("F", true)
+    else
+        mk("UIStroke", { Thickness = o.t or 1.6, ApplyStrokeMode = Enum.ApplyStrokeMode.Border }, f)
+    end
+    return f
+end
+local ICONS = {
+    home = function(c)
+        ipart(c, 0.5, 0.64, 0.6, 0.42, { r = 0.08 })
+        ipart(c, 0.29, 0.34, 0.6, 0.12, { fill = true, rot = -35, r = 0.5 })
+        ipart(c, 0.71, 0.34, 0.6, 0.12, { fill = true, rot = 35, r = 0.5 })
+        ipart(c, 0.5, 0.72, 0.14, 0.24, { fill = true })
+    end,
+    eye = function(c)
+        ipart(c, 0.5, 0.5, 0.94, 0.56, { r = 0.5 })
+        ipart(c, 0.5, 0.5, 0.28, 0.28, { fill = true, r = 0.5 })
+    end,
+    user = function(c)
+        ipart(c, 0.5, 0.3, 0.34, 0.34, { fill = true, r = 0.5 })
+        ipart(c, 0.5, 0.78, 0.66, 0.36, { fill = true, r = 0.45 })
+    end,
+    hammer = function(c)
+        ipart(c, 0.5, 0.52, 0.12, 0.86, { fill = true, rot = 45, r = 0.3 })
+        ipart(c, 0.7, 0.3, 0.5, 0.2, { fill = true, rot = -45, r = 0.25 })
+    end,
+    keyboard = function(c)
+        ipart(c, 0.5, 0.5, 0.94, 0.62, { r = 0.16 })
+        ipart(c, 0.27, 0.4, 0.14, 0.12, { fill = true }); ipart(c, 0.5, 0.4, 0.14, 0.12, { fill = true })
+        ipart(c, 0.73, 0.4, 0.14, 0.12, { fill = true })
+        ipart(c, 0.5, 0.63, 0.5, 0.12, { fill = true })
+    end,
+    gear = function(c)
+        for k = 0, 7 do
+            local a = math.rad(k * 45)
+            ipart(c, 0.5 + 0.38 * math.sin(a), 0.5 - 0.38 * math.cos(a), 0.16, 0.2, { fill = true, rot = k * 45 })
+        end
+        ipart(c, 0.5, 0.5, 0.56, 0.56, { r = 0.5, t = 2 })
+        ipart(c, 0.5, 0.5, 0.16, 0.16, { fill = true, r = 0.5 })
+    end,
+    chevron = function(c)
+        ipart(c, 0.42, 0.33, 0.55, 0.15, { fill = true, rot = 45, r = 0.5 })
+        ipart(c, 0.42, 0.67, 0.55, 0.15, { fill = true, rot = -45, r = 0.5 })
+    end,
+    down = function(c)
+        ipart(c, 0.33, 0.4, 0.5, 0.16, { fill = true, rot = 45, r = 0.5 })
+        ipart(c, 0.67, 0.4, 0.5, 0.16, { fill = true, rot = -45, r = 0.5 })
+    end,
+    up = function(c)
+        ipart(c, 0.33, 0.6, 0.5, 0.16, { fill = true, rot = -45, r = 0.5 })
+        ipart(c, 0.67, 0.6, 0.5, 0.16, { fill = true, rot = 45, r = 0.5 })
+    end,
+    close = function(c)
+        ipart(c, 0.5, 0.5, 0.95, 0.14, { fill = true, rot = 45, r = 0.5 })
+        ipart(c, 0.5, 0.5, 0.95, 0.14, { fill = true, rot = -45, r = 0.5 })
+    end,
+    download = function(c)
+        ipart(c, 0.5, 0.36, 0.12, 0.5, { fill = true, r = 0.5 })
+        ipart(c, 0.34, 0.58, 0.4, 0.13, { fill = true, rot = 45, r = 0.5 })
+        ipart(c, 0.66, 0.58, 0.4, 0.13, { fill = true, rot = -45, r = 0.5 })
+        ipart(c, 0.5, 0.88, 0.8, 0.12, { fill = true, r = 0.5 })
+    end,
+    min = function(c) ipart(c, 0.5, 0.5, 0.85, 0.14, { fill = true, r = 0.5 }) end,
+    max = function(c) ipart(c, 0.5, 0.5, 0.7, 0.7, { r = 0.15, t = 1.6 }) end,
+}
+
+local LUCIDE_URL = (getgenv and getgenv().MAHIRA_LUCIDE_URL)
+    or "https://github.com/latte-soft/lucide-roblox/releases/latest/download/lucide-roblox.luau"
+
+local Lucide
+do
+    local CACHE = "MAHIRA_lucide.luau"
+    local function load(src)
+        local ok, lib = pcall(function() return loadstring(src)() end)
+        if ok and type(lib) == "table" and type(lib.GetAsset) == "function" then return lib end
+    end
+    if isfile and readfile and isfile(CACHE) then
+        local okr, src = pcall(readfile, CACHE)
+        if okr then Lucide = load(src) end
+    end
+    if not Lucide and writefile then
+        task.spawn(function()
+            local ok, src = pcall(function() return game:HttpGet(LUCIDE_URL) end)
+            if ok and type(src) == "string" and #src > 1000 and load(src) then pcall(writefile, CACHE, src) end
+        end)
+    end
+end
+local LUCIDE_NAMES = {
+    home = { "home", "house" }, eye = { "eye" }, user = { "user" }, hammer = { "hammer", "pickaxe" },
+    keyboard = { "keyboard" }, gear = { "settings", "cog" }, chevron = { "chevron-right" },
+    down = { "chevron-down" }, up = { "chevron-up" }, close = { "x" }, min = { "minus" },
+    max = { "square" }, download = { "download" },
+}
+local function lucideAsset(kind)
+    if not Lucide then return nil end
+    for _, n in ipairs(LUCIDE_NAMES[kind] or {}) do
+        local ok, a = pcall(Lucide.GetAsset, n, 48)
+        if ok and a then return a end
+    end
+end
+
+local function setIconColor(ic, color)
+    if ic:IsA("ImageLabel") then ic.ImageColor3 = color; return end
+    for _, d in ipairs(ic:GetDescendants()) do
+        if d:IsA("UIStroke") then d.Color = color
+        elseif d:IsA("Frame") and d:GetAttribute("F") then d.BackgroundColor3 = color end
+    end
+end
+local function newIcon(parent, kind, size, color)
+    local a = lucideAsset(kind)
+    if a then
+        return mk("ImageLabel", { BackgroundTransparency = 1, Size = UDim2.fromOffset(size, size),
+            Image = a.Url, ImageRectSize = a.ImageRectSize, ImageRectOffset = a.ImageRectOffset,
+            ImageColor3 = color or TXT, ScaleType = Enum.ScaleType.Fit }, parent)
+    end
+    local ic = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.fromOffset(size, size) }, parent)
+    ICONS[kind](ic)
+    setIconColor(ic, color or TXT)
+    return ic
+end
+
+local function getChar() return LP.Character end
+local function getHum() local c = getChar(); return c and c:FindFirstChildOfClass("Humanoid") end
+local function getRoot() local c = getChar(); return c and c:FindFirstChild("HumanoidRootPart") end
+
+local Remotes
+task.spawn(function()
+    local ok, r = pcall(function()
+        return require(RS:WaitForChild("Systems", 10):WaitForChild("Modules"):WaitForChild("Core"):WaitForChild("Remotes"))
+    end)
+    if ok then Remotes = r end
+end)
+
+local parentGui
+do
+    local ok, h = pcall(function() return (gethui and gethui()) or game:GetService("CoreGui") end)
+    parentGui = (ok and h) or LP:WaitForChild("PlayerGui")
+end
+local gui = mk("ScreenGui", { Name = "MAHIRA_X_HUB", ResetOnSpawn = false, IgnoreGuiInset = true,
+    ZIndexBehavior = Enum.ZIndexBehavior.Sibling, DisplayOrder = 999 })
+pcall(function() if syn and syn.protect_gui then syn.protect_gui(gui) end end)
+gui.Parent = parentGui
+
+local espFolder = mk("Folder", { Name = "ESP" }, gui)
+
+local function notify(msg)
+    local f = mk("Frame", { BackgroundColor3 = CARD, AnchorPoint = Vector2.new(0.5, 1),
+        Position = UDim2.new(0.5, 0, 1, 40), Size = UDim2.fromOffset(240, 34), ZIndex = 50 }, gui)
+    corner(f, 8); stroke(f, ACCENT, 1, 0.3)
+    local l = text(f, msg, 12, TXT, false, Enum.TextXAlignment.Center)
+    l.Size = UDim2.fromScale(1, 1); l.ZIndex = 51
+    tween(f, 0.25, { Position = UDim2.new(0.5, 0, 1, -24) })
+    task.delay(2.2, function()
+        tween(f, 0.25, { Position = UDim2.new(0.5, 0, 1, 40) })
+        task.wait(0.3); f:Destroy()
+    end)
+end
+
+local SIZE_N, SIZE_L = Vector2.new(560, 420), Vector2.new(720, 470)
+local main = mk("Frame", { Name = "Main", BackgroundColor3 = BG, BackgroundTransparency = 0.04,
+    AnchorPoint = Vector2.new(0.5, 0.5), Position = UDim2.fromScale(0.5, 0.5),
+    Size = UDim2.fromOffset(SIZE_N.X, SIZE_N.Y), ClipsDescendants = true }, gui)
+corner(main, 14); stroke(main, LINE, 1, 0.2)
+local uiscale = mk("UIScale", {}, main)
+local function fitScale(mult)
+    local vp = cam.ViewportSize
+    local s = math.min(1, (vp.X - 20) / SIZE_N.X, (vp.Y - 20) / SIZE_N.Y)
+    uiscale.Scale = math.max(0.5, s) * (mult or 1)
+end
+local userScale = 1
+fitScale(userScale)
+bind(cam:GetPropertyChangedSignal("ViewportSize"), function() fitScale(userScale) end)
+
+local header = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 46) }, main)
+local logo = newIcon(header, "chevron", 22, ACCENT)
+logo.Position = UDim2.fromOffset(16, 12)
+local title = text(header, "MAHIRA X HUB", 14, TXT, true)
+title.Position = UDim2.fromOffset(44, 7); title.Size = UDim2.fromOffset(200, 18)
+local subt = text(header, "Premium Script", 10, SUB)
+subt.Position = UDim2.fromOffset(44, 24); subt.Size = UDim2.fromOffset(200, 14)
+
+local function winBtn(kind, xoff)
+    local b = mk("TextButton", { BackgroundColor3 = CARD, Text = "", AnchorPoint = Vector2.new(1, 0.5),
+        Position = UDim2.new(1, xoff, 0, 23), Size = UDim2.fromOffset(26, 26), AutoButtonColor = false }, header)
+    corner(b, 13); stroke(b, LINE, 1, 0.3)
+    local ic = newIcon(b, kind, 12, TXT)
+    ic.AnchorPoint = Vector2.new(0.5, 0.5); ic.Position = UDim2.fromScale(0.5, 0.5)
+    return b
+end
+local bClose = winBtn("close", -12)
+local bMax   = winBtn("max", -44)
+local bMin   = winBtn("min", -76)
+
+do
+    local dragging, startPos, startInput
+    bind(header.InputBegan, function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+            dragging = true; startPos = main.Position; startInput = i.Position
+        end
+    end)
+    bind(UIS.InputChanged, function(i)
+        if dragging and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+            local d = (i.Position - startInput) / uiscale.Scale
+            main.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + d.X, startPos.Y.Scale, startPos.Y.Offset + d.Y)
+        end
+    end)
+    bind(UIS.InputEnded, function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+end
+
+local bubble = mk("TextButton", { BackgroundColor3 = BG, Text = "", Position = UDim2.new(0, 14, 0.5, -22),
+    Size = UDim2.fromOffset(44, 44), Visible = false, AutoButtonColor = false }, gui)
+corner(bubble, 22); stroke(bubble, ACCENT, 1.5, 0.2)
+do
+    local bi = newIcon(bubble, "chevron", 24, ACCENT)
+    bi.AnchorPoint = Vector2.new(0.5, 0.5); bi.Position = UDim2.fromScale(0.5, 0.5)
+end
+local function setVisible(v)
+    main.Visible = v; bubble.Visible = not v
+end
+bind(bMin.MouseButton1Click, function() setVisible(false) end)
+bind(bubble.MouseButton1Click, function() setVisible(true) end)
+local big = false
+bind(bMax.MouseButton1Click, function()
+    big = not big
+    local s = big and SIZE_L or SIZE_N
+    tween(main, 0.2, { Size = UDim2.fromOffset(s.X, s.Y) })
+end)
+
+local side = mk("Frame", { BackgroundColor3 = CARD, BackgroundTransparency = 0.2, Position = UDim2.fromOffset(10, 50),
+    Size = UDim2.new(0, 128, 1, -60) }, main)
+corner(side, 10); stroke(side, LINE, 1, 0.4)
+
+local search = mk("TextBox", { BackgroundColor3 = CARD2, PlaceholderText = "ค้นหา...", Text = "",
+    PlaceholderColor3 = SUB, TextColor3 = TXT, TextSize = 11, Font = Enum.Font.Gotham,
+    Position = UDim2.fromOffset(8, 8), Size = UDim2.new(1, -16, 0, 26), ClearTextOnFocus = false,
+    TextXAlignment = Enum.TextXAlignment.Left }, side)
+corner(search, 7); pad(search, 8, 0)
+
+local tabScroll = mk("ScrollingFrame", { BackgroundTransparency = 1, BorderSizePixel = 0,
+    Position = UDim2.fromOffset(6, 62), Size = UDim2.new(1, -12, 1, -120), ScrollBarThickness = 2, ScrollBarImageColor3 = ACCENT,
+    AutomaticCanvasSize = Enum.AutomaticSize.Y, CanvasSize = UDim2.new() }, side)
+list(tabScroll, 2)
+local secLbl = text(side, "เมนู", 9, SUB, true)
+secLbl.Position = UDim2.fromOffset(12, 44); secLbl.Size = UDim2.new(1, -24, 0, 14)
+
+local prof = mk("Frame", { BackgroundColor3 = CARD2, AnchorPoint = Vector2.new(0, 1),
+    Position = UDim2.new(0, 6, 1, -6), Size = UDim2.new(1, -12, 0, 48) }, side)
+corner(prof, 9); stroke(prof, LINE, 1, 0.4)
+local av = mk("ImageLabel", { BackgroundColor3 = BG, Position = UDim2.fromOffset(7, 7), Size = UDim2.fromOffset(34, 34) }, prof)
+corner(av, 17)
+task.spawn(function()
+    local ok, img = pcall(function()
+        return Players:GetUserThumbnailAsync(LP.UserId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100)
+    end)
+    if ok then av.Image = img end
+end)
+local dot = mk("Frame", { BackgroundColor3 = Color3.fromRGB(70, 220, 120), Position = UDim2.fromOffset(31, 31),
+    Size = UDim2.fromOffset(9, 9) }, prof)
+corner(dot, 5); stroke(dot, CARD2, 2)
+local pn = text(prof, LP.DisplayName, 11, TXT, true)
+pn.Position = UDim2.fromOffset(46, 9); pn.Size = UDim2.new(1, -50, 0, 14)
+local pu = text(prof, "@" .. LP.Name, 9, SUB)
+pu.Position = UDim2.fromOffset(46, 25); pu.Size = UDim2.new(1, -50, 0, 12)
+
+local content = mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(146, 50),
+    Size = UDim2.new(1, -156, 1, -60) }, main)
+
+local tabs, tabOrder, currentTab = {}, {}, nil
+
+local function selectTab(name)
+    for n, t in pairs(tabs) do
+        local on = (n == name)
+        t.page.Visible = on
+        t.btn.BackgroundTransparency = on and 0 or 1
+        t.btn.BackgroundColor3 = ACCENT_D
+        t.stroke.Transparency = on and 0 or 1
+        t.lbl.TextColor3 = on and TXT or SUB
+        setIconColor(t.ico, on and ACCENT or SUB)
+    end
+    currentTab = name
+end
+
+local function newTab(name, icon, heading, subheading)
+    local btn = mk("TextButton", { BackgroundTransparency = 1, Text = "", AutoButtonColor = false,
+        Size = UDim2.new(1, 0, 0, 26) }, tabScroll)
+    corner(btn, 8)
+    local st = stroke(btn, ACCENT, 1, 1)
+    local ico = newIcon(btn, icon, 16, SUB)
+    ico.Position = UDim2.fromOffset(9, 5)
+    local lbl = text(btn, name, 11, SUB, true)
+    lbl.Position = UDim2.fromOffset(32, 5); lbl.Size = UDim2.new(1, -36, 0, 16)
+
+    local page = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), Visible = false }, content)
+    local h = text(page, heading, 18, TXT, true)
+    h.Size = UDim2.new(1, 0, 0, 22)
+    local sh = text(page, subheading, 11, SUB)
+    sh.Position = UDim2.fromOffset(0, 22); sh.Size = UDim2.new(1, 0, 0, 14)
+    local cols = mk("Frame", { BackgroundTransparency = 1, Position = UDim2.fromOffset(0, 44),
+        Size = UDim2.new(1, 0, 1, -44) }, page)
+    local function column(xs, ws)
+        local sf = mk("ScrollingFrame", { BackgroundTransparency = 1, BorderSizePixel = 0,
+            Position = UDim2.new(xs, xs > 0 and 4 or 0, 0, 0), Size = UDim2.new(ws, -4, 1, 0),
+            ScrollBarThickness = 2, ScrollBarImageColor3 = ACCENT, AutomaticCanvasSize = Enum.AutomaticSize.Y,
+            CanvasSize = UDim2.new() }, cols)
+        list(sf, 8); pad(sf, 0, 0, 4, 8)
+        return sf
+    end
+    local T = { page = page, btn = btn, lbl = lbl, ico = ico, stroke = st, name = name,
+        left = column(0, 0.56), right = column(0.56, 0.44) }
+    tabs[name] = T; tabOrder[#tabOrder + 1] = name
+    bind(btn.MouseButton1Click, function() selectTab(name) end)
+    return T
+end
+
+bind(search:GetPropertyChangedSignal("Text"), function()
+    local q = string.lower(search.Text)
+    for n, t in pairs(tabs) do
+        t.btn.Visible = (q == "" or string.find(string.lower(n), q, 1, true) ~= nil)
+    end
+end)
+
+local function newCard(col, title)
+    local card = mk("Frame", { BackgroundColor3 = CARD, Size = UDim2.new(1, 0, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y }, col)
+    corner(card, 10); stroke(card, LINE, 1, 0.35); pad(card, 10, 10)
+    list(card, 8)
+    local hd = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 14), LayoutOrder = 0 }, card)
+    local bar = mk("Frame", { BackgroundColor3 = ACCENT, Size = UDim2.fromOffset(3, 12), Position = UDim2.fromOffset(0, 1) }, hd)
+    corner(bar, 2)
+    local tl = text(hd, title, 11, TXT, true)
+    tl.Position = UDim2.fromOffset(10, 0); tl.Size = UDim2.new(1, -10, 1, 0)
+
+    local C = {}
+    local order = 1
+    local function nextOrder() order = order + 1; return order end
+
+    function C:Label(str)
+        local l = text(card, str, 10, SUB); l.LayoutOrder = nextOrder(); l.TextWrapped = true
+        l.TextTruncate = Enum.TextTruncate.None; l.AutomaticSize = Enum.AutomaticSize.Y
+        l.Size = UDim2.new(1, 0, 0, 12)
+        return l
+    end
+
+    function C:Toggle(label, desc, default, cb)
+        local h = desc and 38 or 26
+        local row = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, h), LayoutOrder = nextOrder() }, card)
+        local l = text(row, label, 12, TXT, true); l.Size = UDim2.new(1, -50, 0, 16)
+        l.Position = UDim2.fromOffset(0, desc and 2 or 5)
+        if desc then
+            local d = text(row, desc, 10, SUB); d.Position = UDim2.fromOffset(0, 19); d.Size = UDim2.new(1, -50, 0, 13)
+        end
+        local sw = mk("Frame", { BackgroundColor3 = CARD2, AnchorPoint = Vector2.new(1, 0.5),
+            Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.fromOffset(36, 18) }, row)
+        corner(sw, 9); local ss = stroke(sw, LINE, 1, 0)
+        local knob = mk("Frame", { BackgroundColor3 = SUB, Position = UDim2.fromOffset(2, 2), Size = UDim2.fromOffset(14, 14) }, sw)
+        corner(knob, 7)
+        local state = default and true or false
+        local obj = {}
+        local function render()
+            tween(knob, 0.15, { Position = state and UDim2.fromOffset(20, 2) or UDim2.fromOffset(2, 2),
+                BackgroundColor3 = state and Color3.new(1, 1, 1) or SUB })
+            tween(sw, 0.15, { BackgroundColor3 = state and ACCENT or CARD2 })
+            ss.Color = state and ACCENT or LINE
+        end
+        function obj.Set(v, silent)
+            state = v and true or false; render()
+            if cb and not silent then task.spawn(cb, state) end
+        end
+        function obj.Get() return state end
+        local hit = mk("TextButton", { BackgroundTransparency = 1, Text = "", Size = UDim2.fromScale(1, 1) }, row)
+        bind(hit.MouseButton1Click, function() obj.Set(not state) end)
+        render()
+        if default and cb then task.spawn(cb, state) end
+        return obj
+    end
+
+    function C:Slider(label, min, max, default, suffix, cb)
+        suffix = suffix or ""
+        local row = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 38), LayoutOrder = nextOrder() }, card)
+        local l = text(row, label, 11, SUB); l.Size = UDim2.new(0.6, 0, 0, 14)
+        local v = text(row, "", 11, ACCENT, true, Enum.TextXAlignment.Right)
+        v.Position = UDim2.fromScale(0.6, 0); v.Size = UDim2.new(0.4, 0, 0, 14)
+        local track = mk("Frame", { BackgroundColor3 = CARD2, Position = UDim2.fromOffset(0, 24), Size = UDim2.new(1, 0, 0, 4) }, row)
+        corner(track, 2)
+        local fill = mk("Frame", { BackgroundColor3 = ACCENT, Size = UDim2.fromScale(0, 1) }, track)
+        corner(fill, 2)
+        local knob = mk("Frame", { BackgroundColor3 = Color3.new(1, 1, 1), AnchorPoint = Vector2.new(0.5, 0.5),
+            Position = UDim2.fromScale(0, 0.5), Size = UDim2.fromOffset(12, 12) }, track)
+        corner(knob, 6)
+        local value = default
+        local obj = {}
+        local function setVal(n, silent)
+            n = math.clamp(math.floor(n + 0.5), min, max); value = n
+            local a = (n - min) / (max - min)
+            fill.Size = UDim2.fromScale(a, 1); knob.Position = UDim2.fromScale(a, 0.5)
+            v.Text = tostring(n) .. suffix
+            if cb and not silent then cb(n) end
+        end
+        obj.Set = setVal
+        local hit = mk("TextButton", { BackgroundTransparency = 1, Text = "", Position = UDim2.fromOffset(0, 16),
+            Size = UDim2.new(1, 0, 0, 22) }, row)
+        local drag = false
+        local function upd(x)
+            local a = math.clamp((x - track.AbsolutePosition.X) / math.max(1, track.AbsoluteSize.X), 0, 1)
+            setVal(min + a * (max - min))
+        end
+        bind(hit.InputBegan, function(i)
+            if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+                drag = true; upd(i.Position.X)
+            end
+        end)
+        bind(UIS.InputChanged, function(i)
+            if drag and (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) then
+                upd(i.Position.X)
+            end
+        end)
+        bind(UIS.InputEnded, function(i)
+            if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+                drag = false
+            end
+        end)
+        setVal(default, true)
+        if cb then cb(default) end
+        return obj
+    end
+
+    function C:Dropdown(label, options, default, cb)
+        local wrap = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 0),
+            AutomaticSize = Enum.AutomaticSize.Y, LayoutOrder = nextOrder() }, card)
+        list(wrap, 4)
+        local l = text(wrap, label, 10, SUB); l.LayoutOrder = 1
+        local btn = mk("TextButton", { BackgroundColor3 = CARD2, Text = "", AutoButtonColor = false,
+            Size = UDim2.new(1, 0, 0, 28), LayoutOrder = 2 }, wrap)
+        corner(btn, 7); stroke(btn, LINE, 1, 0.3)
+        local cur = text(btn, default, 11, TXT, true); cur.Position = UDim2.fromOffset(10, 6); cur.Size = UDim2.new(1, -30, 0, 16)
+        local arrDown = newIcon(btn, "down", 12, SUB)
+        arrDown.AnchorPoint = Vector2.new(1, 0.5); arrDown.Position = UDim2.new(1, -10, 0.5, 0)
+        local arrUp = newIcon(btn, "up", 12, ACCENT)
+        arrUp.AnchorPoint = Vector2.new(1, 0.5); arrUp.Position = UDim2.new(1, -10, 0.5, 0); arrUp.Visible = false
+        local opts = mk("Frame", { BackgroundColor3 = CARD2, Size = UDim2.new(1, 0, 0, 0), AutomaticSize = Enum.AutomaticSize.Y,
+            Visible = false, LayoutOrder = 3 }, wrap)
+        corner(opts, 7); stroke(opts, LINE, 1, 0.3); pad(opts, 4, 4); list(opts, 2)
+        for _, o in ipairs(options) do
+            local ob = mk("TextButton", { BackgroundTransparency = 1, Text = o, TextColor3 = SUB, TextSize = 11,
+                Font = Enum.Font.Gotham, Size = UDim2.new(1, 0, 0, 24), AutoButtonColor = false,
+                TextXAlignment = Enum.TextXAlignment.Left }, opts)
+            pad(ob, 8, 0)
+            bind(ob.MouseButton1Click, function()
+                cur.Text = o; opts.Visible = false; arrDown.Visible = true; arrUp.Visible = false
+                if cb then cb(o) end
+            end)
+        end
+        bind(btn.MouseButton1Click, function()
+            opts.Visible = not opts.Visible; arrDown.Visible = not opts.Visible; arrUp.Visible = opts.Visible
+        end)
+        if cb then cb(default) end
+    end
+
+    function C:Button(label, cb)
+        local b = mk("TextButton", { BackgroundColor3 = CARD2, Text = label, TextColor3 = TXT, TextSize = 11,
+            Font = Enum.Font.GothamBold, Size = UDim2.new(1, 0, 0, 28), AutoButtonColor = false,
+            LayoutOrder = nextOrder() }, card)
+        corner(b, 7); stroke(b, ACCENT, 1, 0.5)
+        bind(b.MouseButton1Click, function() if cb then cb() end end)
+        return b
+    end
+
+    function C:Input(label, placeholder, cb)
+        local wrap = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 48), LayoutOrder = nextOrder() }, card)
+        local l = text(wrap, label, 10, SUB)
+        local tb = mk("TextBox", { BackgroundColor3 = CARD2, PlaceholderText = placeholder or "", Text = "",
+            PlaceholderColor3 = SUB, TextColor3 = TXT, TextSize = 11, Font = Enum.Font.Gotham,
+            Position = UDim2.fromOffset(0, 18), Size = UDim2.new(1, 0, 0, 28), ClearTextOnFocus = false,
+            TextXAlignment = Enum.TextXAlignment.Left }, wrap)
+        corner(tb, 7); stroke(tb, LINE, 1, 0.3); pad(tb, 10, 0)
+        bind(tb.FocusLost, function() if cb then cb(tb.Text) end end)
+    end
+
+    function C:Keybind(label, key, cb)
+        local row = mk("Frame", { BackgroundTransparency = 1, Size = UDim2.new(1, 0, 0, 28), LayoutOrder = nextOrder() }, card)
+        local l = text(row, label, 12, TXT, true); l.Position = UDim2.fromOffset(0, 6); l.Size = UDim2.new(1, -90, 0, 16)
+        local b = mk("TextButton", { BackgroundColor3 = CARD2, TextColor3 = ACCENT, TextSize = 10, Font = Enum.Font.GothamBold,
+            AnchorPoint = Vector2.new(1, 0.5), Position = UDim2.new(1, 0, 0.5, 0), Size = UDim2.fromOffset(84, 24),
+            AutoButtonColor = false, Text = "" }, row)
+        corner(b, 6); stroke(b, LINE, 1, 0.3)
+        local function nm(k) return k and k.Name or "None" end
+        b.Text = nm(key)
+        local waiting = false
+        bind(b.MouseButton1Click, function()
+            waiting = true; b.Text = "..."
+        end)
+        bind(UIS.InputBegan, function(i, gp)
+            if not waiting then return end
+            local k
+            if i.UserInputType == Enum.UserInputType.Keyboard then k = i.KeyCode
+            elseif i.UserInputType == Enum.UserInputType.MouseButton2 or i.UserInputType == Enum.UserInputType.MouseButton3 then
+                k = i.UserInputType
+            end
+            if k then
+                waiting = false
+                if k == Enum.KeyCode.Escape then k = nil end
+                b.Text = nm(k); if cb then cb(k) end
+            end
+        end)
+    end
+    return C
+end
+
+local tHome   = newTab("หน้าหลัก", "home", "หน้าหลัก", "MAHIRA X HUB | ภาพรวม")
+local tESP    = newTab("ESP", "eye", "ESP", "มองทะลุ / แสดงข้อมูลผู้เล่น")
+local tPlayer = newTab("Player", "user", "Player", "ตัวละคร / การเคลื่อนที่")
+local tFarm   = newTab("Farm", "hammer", "Farm", "ออโต้งาน / ออโต้โต้ตอบ")
+local tTP     = newTab("Teleport", "send", "Teleport", "วาร์ปแบบ bypass (ลอยค้างแล้วปล่อย)")
+local tDump   = newTab("ดึงข้อมูล", "download", "ดึงข้อมูล", "ดึงข้อมูลแมพ / ระบบฟาม จากเกมจริง")
+local tKeys   = newTab("Keybinds", "keyboard", "Keybinds", "ตั้งค่าปุ่มลัด")
+local tSet    = newTab("ตั้งค่า", "gear", "ตั้งค่า", "UI และระบบ")
+
+do
+    local c = newCard(tHome.left, "ข้อมูล")
+    local gameLbl = c:Label("เกม: ...")
+    task.spawn(function()
+        local ok, info = pcall(function() return game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId) end)
+        gameLbl.Text = "เกม: " .. ((ok and info and info.Name) or "Unknown")
+    end)
+    c:Label("PlaceId: " .. tostring(game.PlaceId))
+    local live = c:Label("FPS: -- | Ping: -- | ผู้เล่น: --")
+    local fps, acc, frames = 60, 0, 0
+    bind(RunService.RenderStepped, function(dt)
+        acc = acc + dt; frames = frames + 1
+        if acc >= 0.5 then fps = math.floor(frames / acc + 0.5); acc = 0; frames = 0
+            local ping = 0
+            pcall(function() ping = math.floor(Stats.Network.ServerStatsItem["Data Ping"]:GetValue()) end)
+            live.Text = ("FPS: %d | Ping: %dms | ผู้เล่น: %d"):format(fps, ping, #Players:GetPlayers())
+        end
+    end)
+    local c2 = newCard(tHome.right, "ทางลัด")
+    c2:Button("Rejoin เซิร์ฟเวอร์", function() TeleportSvc:Teleport(game.PlaceId, LP) end)
+    c2:Button("คัดลอก JobId", function()
+        if setclipboard then setclipboard(game.JobId); notify("คัดลอก JobId แล้ว") end
+    end)
+end
+
+local function sameTeam(p)
+    return LP.Team ~= nil and p.Team == LP.Team
+end
+
+do
+    local E = S.ESP
+    local c = newCard(tESP.left, "ESP Settings")
+    c:Toggle("เปิด ESP", "แสดงข้อมูลผู้เล่นทั้งหมด", E.Enabled, function(v) E.Enabled = v end)
+    c:Toggle("Highlight", "เรืองแสงทะลุกำแพง", E.Highlight, function(v) E.Highlight = v end)
+    c:Toggle("ชื่อ", nil, E.Name, function(v) E.Name = v end)
+    c:Toggle("ระยะ", nil, E.Dist, function(v) E.Dist = v end)
+    c:Toggle("เลือด", nil, E.Health, function(v) E.Health = v end)
+    c:Slider("ระยะสูงสุด", 100, 5000, E.Max, " studs", function(v) E.Max = v end)
+    local e = newCard(tESP.right, "ESP Extra")
+    e:Toggle("เช็คทีม", "ซ่อนคนในทีมเดียวกัน", E.Team, function(v) E.Team = v end)
+    e:Toggle("แสดงสถานะล้ม", "ติด [ล้ม] เมื่อ IsDead/RestoredDead", E.Down, function(v) E.Down = v end)
+end
+
+local espObjs = {}
+local function clearESP(p)
+    local o = espObjs[p]
+    if o then
+        pcall(function() o.hl:Destroy() end); pcall(function() o.bb:Destroy() end)
+        espObjs[p] = nil
+    end
+end
+local function ensureESP(p, char, head)
+    local o = espObjs[p]
+    if o and o.char == char and o.hl.Parent and o.bb.Parent then return o end
+    clearESP(p)
+    local hl = mk("Highlight", { Adornee = char, FillColor = ACCENT, OutlineColor = Color3.new(1, 1, 1),
+        FillTransparency = 0.6, OutlineTransparency = 0.1, DepthMode = Enum.HighlightDepthMode.AlwaysOnTop }, espFolder)
+    local bb = mk("BillboardGui", { Adornee = head, AlwaysOn = nil, AlwaysOnTop = true,
+        Size = UDim2.fromOffset(180, 44), StudsOffset = Vector3.new(0, 2.6, 0) }, espFolder)
+    local lbl = mk("TextLabel", { BackgroundTransparency = 1, Size = UDim2.fromScale(1, 1), TextSize = 12,
+        Font = Enum.Font.GothamBold, TextColor3 = Color3.new(1, 1, 1), TextStrokeTransparency = 0.3,
+        RichText = true, Text = "" }, bb)
+    o = { char = char, hl = hl, bb = bb, lbl = lbl }
+    espObjs[p] = o
+    return o
+end
+task.spawn(function()
+    while alive do
+        local E = S.ESP
+        local myRoot = getRoot()
+        for _, p in ipairs(Players:GetPlayers()) do
+            if p ~= LP then
+                local char = p.Character
+                local hum = char and char:FindFirstChildOfClass("Humanoid")
+                local head = char and char:FindFirstChild("Head")
+                local root = char and char:FindFirstChild("HumanoidRootPart")
+                local show = E.Enabled and hum and head and root and hum.Health > 0 and not (E.Team and sameTeam(p))
+                local dist = 0
+                if show and myRoot then
+                    dist = (root.Position - myRoot.Position).Magnitude
+                    if dist > E.Max then show = false end
+                end
+                if show then
+                    local o = ensureESP(p, char, head)
+                    o.hl.Enabled = E.Highlight
+                    o.bb.Enabled = true
+                    local parts = {}
+                    if E.Name then parts[#parts + 1] = p.DisplayName end
+                    if E.Dist then parts[#parts + 1] = ("[%dm]"):format(dist) end
+                    if E.Health then parts[#parts + 1] = ("HP %d"):format(hum.Health) end
+                    local t = table.concat(parts, "  ")
+                    if E.Down and (char:GetAttribute("IsDead") or char:GetAttribute("RestoredDead")) then
+                        t = t .. '  <font color="rgb(255,90,90)">[ล้ม]</font>'
+                    end
+                    o.lbl.Text = t
+                else
+                    clearESP(p)
+                end
+            else
+                clearESP(p)
+            end
+        end
+        for p in pairs(espObjs) do
+            if not p.Parent then clearESP(p) end
+        end
+        task.wait(0.1)
+    end
+end)
+
+local noclipToggleObj
+do
+    local P = S.Player
+    local c = newCard(tPlayer.left, "Movement")
+    c:Slider("Speed Boost (เพิ่มความเร็ว)", 0, 60, P.Speed, "", function(v) P.Speed = v end)
+    noclipToggleObj = c:Toggle("Noclip", "ทะลุสิ่งกีดขวาง", false, function(v) P.Noclip = v end)
+    c:Toggle("กระโดดไม่จำกัด", nil, false, function(v) P.InfJump = v end)
+
+    local e = newCard(tPlayer.right, "Stats")
+    e:Toggle("สตามิน่าไม่จำกัด", "ล็อคค่า Stamina ที่ฝั่งไคลเอนต์", false, function(v) P.InfStamina = v end)
+    e:Toggle("ไม่หิว", "ล็อคค่า Hunger", false, function(v) P.NoHunger = v end)
+    e:Toggle("รีเกิดอัตโนมัติ", "ยิง _request:Spawn เมื่อตาย", false, function(v) P.AutoRespawn = v end)
+end
+
+bind(UIS.JumpRequest, function()
+    if S.Player.InfJump then
+        local h = getHum(); if h then h:ChangeState(Enum.HumanoidStateType.Jumping) end
+    end
+end)
+
+bind(RunService.Heartbeat, function(dt)
+    local P = S.Player
+    local hum, root, char = getHum(), getRoot(), getChar()
+
+    local st = LP:FindFirstChild("Stats")
+    if st then
+        if P.InfStamina and (st:GetAttribute("Stamina") or 100) < 100 then st:SetAttribute("Stamina", 100) end
+        if P.NoHunger and (st:GetAttribute("Hunger") or 100) < 100 then st:SetAttribute("Hunger", 100) end
+    end
+    if not (hum and root) then return end
+
+    if P.Speed > 0 and hum.MoveDirection.Magnitude > 0 and hum.Health > 0 then
+        root.CFrame = root.CFrame + hum.MoveDirection * (P.Speed * dt)
+    end
+end)
+bind(RunService.Stepped, function()
+    if S.Player.Noclip then
+        local c = getChar()
+        if c then
+            for _, d in ipairs(c:GetDescendants()) do
+                if d:IsA("BasePart") and d.CanCollide then d.CanCollide = false end
+            end
+        end
+    end
+end)
+
+local function hookChar(char)
+    local hum = char:WaitForChild("Humanoid", 10)
+    if not hum then return end
+    bind(hum.Died, function()
+        if S.Player.AutoRespawn then
+            task.wait(1.5)
+            if Remotes then pcall(function() Remotes.Fire("_request", "Spawn") end) end
+        end
+    end)
+end
+if LP.Character then task.spawn(hookChar, LP.Character) end
+bind(LP.CharacterAdded, function(c) task.spawn(hookChar, c) end)
+
+local shownPrompts = {}
+bind(PPS.PromptShown, function(p) shownPrompts[p] = true end)
+bind(PPS.PromptHidden, function(p) shownPrompts[p] = nil end)
+task.spawn(function()
+    while alive do
+        local F = S.Farm
+        if F.Interact and fireproximityprompt then
+            for p in pairs(shownPrompts) do
+                if p.Parent and p.Enabled then
+                    local label = string.lower(p.ActionText .. " " .. p.ObjectText)
+                    if F.Filter == "" or string.find(label, F.Filter, 1, true) then
+                        pcall(function()
+                            p.HoldDuration = 0
+                            fireproximityprompt(p)
+                        end)
+                    end
+                end
+            end
+        end
+        task.wait(0.2)
+    end
+end)
+
+local lastPress, lastNeedle = 0, nil
+bind(RunService.RenderStepped, function()
+    if not S.Farm.BlackJob then return end
+    local pg = LP:FindFirstChild("PlayerGui")
+    local mg = pg and pg:FindFirstChild("Minigame")
+    local mainF = mg and mg:FindFirstChild("Main")
+    if not (mainF and mainF.Visible) then lastNeedle = nil; return end
+    if mg:IsA("ScreenGui") and not mg.Enabled then lastNeedle = nil; return end
+    local needle, point = mainF:FindFirstChild("Needle"), mainF:FindFirstChild("Point")
+    if not (needle and point) then return end
+
+    local moving = lastNeedle ~= nil and math.abs(needle.Rotation - lastNeedle) > 0.01
+    lastNeedle = needle.Rotation
+    if not moving then return end
+    local diff = (needle.Rotation - point.Rotation + 180) % 360 - 180
+    if math.abs(diff) <= S.Farm.Tolerance and os.clock() - lastPress > 0.35 then
+        lastPress = os.clock()
+        pcall(function()
+            VIM:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
+            task.wait(0.03)
+            VIM:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
+        end)
+    end
+end)
+
+local function promptPos(p)
+    local par = p.Parent
+    if par and par:IsA("BasePart") then return par.Position end
+    if par and par:IsA("Attachment") then return par.WorldPosition end
+    local m = p:FindFirstAncestorOfClass("Model")
+    if m then
+        local ok, pv = pcall(function() return m:GetPivot().Position end)
+        if ok then return pv end
+    end
+end
+local function promptMatch(p)
+    local f = S.Farm.Filter
+    if f == "" then return true end
+    local label = string.lower(p.ActionText .. " " .. p.ObjectText .. " " .. p:GetFullName())
+    return string.find(label, f, 1, true) ~= nil
+end
+local walkTo
+local PathfindingService = game:GetService("PathfindingService")
+local function nearestPrompt()
+    local root = getRoot()
+    if not root then return end
+    local best, bestD
+    for _, d in ipairs(workspace:GetDescendants()) do
+        if d:IsA("ProximityPrompt") and d.Enabled and promptMatch(d) then
+            local pos = promptPos(d)
+            if pos then
+                local dist = (pos - root.Position).Magnitude
+                if (not bestD or dist < bestD) then best, bestD = d, dist end
+            end
+        end
+    end
+    return best, bestD
+end
+
+walkTo = function(pos, stopDist, timeout)
+    local hum, root = getHum(), getRoot()
+    if not (hum and root and pos) then return false end
+    stopDist, timeout = stopDist or 6, timeout or 40
+    local t0 = os.clock()
+    local waypoints
+    local path = PathfindingService:CreatePath({ AgentRadius = 2, AgentHeight = 5, AgentCanJump = true })
+    local ok = pcall(function() path:ComputeAsync(root.Position, pos) end)
+    if ok and path.Status == Enum.PathStatus.Success then waypoints = path:GetWaypoints() end
+    local function reached() local r = getRoot(); return r and (r.Position - pos).Magnitude <= stopDist end
+    if waypoints then
+        for _, wp in ipairs(waypoints) do
+            if reached() or not alive then break end
+            if wp.Action == Enum.PathWaypointAction.Jump then hum.Jump = true end
+            hum:MoveTo(wp.Position)
+            local done = false
+            local c = hum.MoveToFinished:Connect(function() done = true end)
+            local t1 = os.clock()
+            while not done and os.clock() - t1 < 4 and not reached() and alive do task.wait(0.1) end
+            c:Disconnect()
+            if os.clock() - t0 > timeout then break end
+        end
+    end
+    while not reached() and alive and os.clock() - t0 < timeout do
+        hum:MoveTo(pos); task.wait(0.2)
+    end
+    return reached()
+end
+
+local bypassTP, TPStop
+do
+    local conn, bodyPos, busy = nil, nil, false
+    local function cleanup()
+        if conn then conn:Disconnect(); conn = nil end
+        if bodyPos then pcall(function() bodyPos:Destroy() end); bodyPos = nil end
+        local h = getHum()
+        pcall(function()
+            if h and h.Parent then
+                h.PlatformStand = false
+                h:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
+                h:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, true)
+                h:ChangeState(Enum.HumanoidStateType.Freefall)
+            end
+        end)
+        busy = false
+    end
+
+    bypassTP = function(target, block)
+        if busy then return false end
+        local root, hum = getRoot(), getHum()
+        if not (root and hum) then return false end
+        if typeof(target) == "Vector3" then target = CFrame.new(target) end
+        busy = true
+        if hum.SeatPart then hum.Sit = false; task.wait(0.3) end
+        pcall(function()
+            hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+            hum:SetStateEnabled(Enum.HumanoidStateType.Ragdoll, false)
+        end)
+        local floatCF = target * CFrame.new(0, 5, 0)
+        pcall(function() LP.Character:PivotTo(floatCF) end)
+        if (root.Position - floatCF.Position).Magnitude > 3 then root.CFrame = floatCF end
+        pcall(function() root.AssemblyLinearVelocity = Vector3.zero; root.AssemblyAngularVelocity = Vector3.zero end)
+        bodyPos = Instance.new("BodyPosition")
+        bodyPos.Position = floatCF.Position
+        bodyPos.MaxForce = Vector3.new(1e5, 1e5, 1e5)
+        bodyPos.P, bodyPos.D = 1e4, 500
+        bodyPos.Parent = root
+        pcall(function() hum.PlatformStand = true end)
+        conn = RunService.Heartbeat:Connect(function()
+            if not root or not root.Parent then return end
+            if (root.Position - floatCF.Position).Magnitude > 2 then
+                pcall(function() root.CFrame = floatCF end)
+                pcall(function() root.AssemblyLinearVelocity = Vector3.zero; root.AssemblyAngularVelocity = Vector3.zero end)
+            end
+        end)
+        local done = false
+        task.delay(math.random(40, 50) / 10, function() cleanup(); done = true end)
+        if block then while not done and alive do task.wait(0.1) end end
+        return true
+    end
+    TPStop = cleanup
+end
+
+local AFStop
+do
+    local AF = { on = false, running = false, status = nil, target = "ใกล้ที่สุด", mult = 10, count = 0, delay = 1.0 }
+    local function say(t) if AF.status then AF.status.Text = t end end
+    local function active() return AF.on and alive end
+    local function pivotPos(inst)
+        if not inst then return end
+        local ok, pv = pcall(function() return inst:GetPivot().Position end)
+        return ok and pv or nil
+    end
+
+    local function farmSites()
+        local out = {}
+        local sys = workspace:FindFirstChild("Systems")
+        local farm = sys and sys:FindFirstChild("Farm")
+        if not farm then return out end
+        for _, f in ipairs(farm:GetChildren()) do
+            local pr = f:FindFirstChild("Prompt")
+            local fm = pr and pr:FindFirstChild("Farm")
+            local spf = pr and pr:FindFirstChild("Spawn")
+            local fp = pivotPos(fm)
+            if fp then
+                out[#out + 1] = { name = f.Name, farm = fp, spawn = pivotPos(spf and spf:FindFirstChild("Spawn")), spawnFolder = spf }
+            end
+        end
+        return out
+    end
+
+    local function isSpawnPrompt(d)
+        return string.find(string.lower(d.ObjectText), "spawn", 1, true) ~= nil or string.find(d:GetFullName(), ".Spawn.", 1, true) ~= nil
+    end
+
+    local function farmHere(site)
+        local farmF = workspace.Systems.Farm
+        local list, listAt, idle = {}, 0, 0
+        while active() do
+            if os.clock() - listAt > 5 then
+                list, listAt = {}, os.clock()
+                for _, d in ipairs(farmF:GetDescendants()) do
+                    if d:IsA("ProximityPrompt") and not isSpawnPrompt(d) then list[#list + 1] = d end
+                end
+            end
+            local root, fired = getRoot(), false
+            if root then
+
+                for _, d in ipairs(list) do
+                    if d.Parent and d.Enabled then
+                        local pos = promptPos(d)
+                        if pos and (pos - root.Position).Magnitude <= d.MaxActivationDistance then
+                            fired = true
+                            task.spawn(function()
+                                for i = 1, AF.mult do
+                                    if not active() then break end
+                                    pcall(fireproximityprompt, d)
+                                    if i < AF.mult then task.wait(0.05) end
+                                end
+                            end)
+                        end
+                    end
+                end
+                if fired then
+                    AF.count = AF.count + 1
+                    say(("เก็บของที่ %s x%d | รอบที่ %d | %.1f วิ/รอบ"):format(site.name, AF.mult, AF.count, AF.delay))
+                    task.wait(AF.delay)
+                end
+            end
+            if fired then idle = 0 else
+                idle = idle + 1
+                say("รอของเกิดที่จุดฟาร์ม " .. site.name)
+                if idle > 60 then return end
+                task.wait(0.5)
+            end
+        end
+    end
+
+    local function loop()
+        if AF.running then return end
+        AF.running = true
+        while active() do
+            local root = getRoot()
+            local sites = farmSites()
+            if not root or #sites == 0 then
+                say("ไม่พบจุดฟาร์ม (ต้องอยู่ในแมพ/โหลดตัวละครก่อน)")
+                task.wait(2)
+            else
+                local site, bestD
+                for _, st in ipairs(sites) do
+                    local d = (st.farm - root.Position).Magnitude
+                    if AF.target == st.name then site, bestD = st, d; break end
+                    if AF.target == "ใกล้ที่สุด" and (not bestD or d < bestD) then site, bestD = st, d end
+                end
+                if not site then
+                    say("ไม่พบจุดฟาร์ม " .. AF.target .. " (ยังไม่โหลด?) ลองใหม่...")
+                    task.wait(2)
+                    continue
+                end
+                if bestD > 8 then
+                    say("วาร์ปไปจุดฟาร์ม " .. site.name)
+                    bypassTP(site.farm, true)
+                end
+                if active() then farmHere(site) end
+                if active() then task.wait(1) end
+            end
+        end
+        AF.running = false
+    end
+
+    AFStop = function() AF.on = false end
+
+    local names = {}
+    for _, st in ipairs(farmSites()) do names[#names + 1] = st.name end
+    if #names == 0 then names = { "Rock", "Rice", "Mango", "Tomato", "Crab", "Banana", "Bread", "Catchup", "Svibranium", "Pig" } end
+    table.sort(names)
+    local pickList = { "ใกล้ที่สุด" }
+    for _, n in ipairs(names) do pickList[#pickList + 1] = n end
+
+    local c = newCard(tFarm.left, "ออโต้ฟาร์ม")
+    c:Dropdown("เลือกจุดฟาร์ม", pickList, "ใกล้ที่สุด", function(v)
+        AF.target = v
+        say("จุดฟาร์ม: " .. v)
+    end)
+    c:Slider("ความเร็ว (หน่วง x0.1 วิ ต่อรอบ)", 3, 32, 10, "", function(v) AF.delay = v / 10 end)
+    c:Slider("คูณการเก็บ (ยิงซ้ำต่อรอบ)", 1, 10, AF.mult, " เท่า", function(v) AF.mult = math.floor(v) end)
+    AF.status = c:Label("กดปุ่มเดียว: วาร์ปไปจุดฟาร์มที่ใกล้ที่สุด → เก็บของวนซ้ำ (ไม่เบิกรถ)")
+    c:Toggle("ออโต้ฟาร์ม", "เปิดครั้งเดียวทำทุกขั้นตอนเอง", false, function(v)
+        AF.on = v
+        if v then task.spawn(loop) else say("หยุดแล้ว") end
+    end)
+    local e = newCard(tFarm.right, "หมายเหตุ")
+    e:Label("ยังไม่มีขั้นตอนขนของไปขาย ต้องรอข้อมูลจากตัวดักจับ Remote (แท็บ ดึงข้อมูล)")
+
+    local sel, coord = names[1], nil
+    local tp = newCard(tTP.left, "วาร์ป (bypass)")
+    tp:Dropdown("เลือกจุดฟาร์ม", names, names[1], function(v) sel = v end)
+    local function siteByName(n)
+        for _, st in ipairs(farmSites()) do if st.name == n then return st end end
+    end
+    tp:Button("วาร์ปไปจุดฟาร์ม", function()
+        task.spawn(function()
+            local st = siteByName(sel)
+            if not st then notify("ไม่พบจุด " .. tostring(sel)); return end
+            notify(bypassTP(st.farm) and "กำลังวาร์ป (ลอยค้าง 4-5 วิ ห้ามขยับ)" or "วาร์ปไม่ได้ (กำลังวาร์ปอยู่/ไม่มีตัวละคร)")
+        end)
+    end)
+    tp:Button("วาร์ปไปจุดเบิกรถ", function()
+        task.spawn(function()
+            local st = siteByName(sel)
+            if not (st and st.spawn) then notify("ไม่พบจุดเบิกรถ"); return end
+            notify(bypassTP(st.spawn) and "กำลังวาร์ป (ลอยค้าง 4-5 วิ ห้ามขยับ)" or "วาร์ปไม่ได้")
+        end)
+    end)
+    tp:Input("พิกัดเอง X, Y, Z", "เช่น -3060, 25, 2875", function(v)
+        local x, y, z = tostring(v):match("(-?[%d%.]+)%s*,%s*(-?[%d%.]+)%s*,%s*(-?[%d%.]+)")
+        coord = x and Vector3.new(tonumber(x), tonumber(y), tonumber(z)) or nil
+    end)
+    tp:Button("วาร์ปไปพิกัดที่กรอก", function()
+        if not coord then notify("กรอกพิกัดให้ถูกก่อน"); return end
+        task.spawn(function() notify(bypassTP(coord) and "กำลังวาร์ป" or "วาร์ปไม่ได้") end)
+    end)
+    local tr = newCard(tTP.right, "วิธีทำงาน")
+    tr:Label("ย้ายตัวไปเหนือจุดหมาย 5 studs แล้วตรึงไว้ 4-5 วิ จากนั้นปล่อยลงพื้น")
+    tr:Label("ระหว่างลอยค้างอย่าเดินหรือกดอะไร รอจนตัวละครลงพื้น")
+end
+
+local DUMP_DIR = "MAHIRA_DUMP"
+local function ser(v, depth, seen, ind)
+    depth = depth or 0; ind = ind or ""
+    local t = typeof(v)
+    if t == "string" then return string.format("%q", v)
+    elseif t == "number" or t == "boolean" or t == "nil" then return tostring(v)
+    elseif t == "Vector3" or t == "Vector2" or t == "Color3" or t == "CFrame" or t == "UDim2" or t == "EnumItem" then
+        return t .. ":" .. tostring(v)
+    elseif t == "Instance" then return "<" .. v.ClassName .. ":" .. v:GetFullName() .. ">"
+    elseif t == "table" then
+        if seen[v] then return "<cycle>" end
+        if depth >= 5 then return "{...}" end
+        seen[v] = true
+        local out, n = { "{" }, 0
+        for k, val in pairs(v) do
+            n = n + 1
+            if n > 300 then out[#out + 1] = ind .. "  ..."; break end
+            if typeof(val) ~= "function" then
+                out[#out + 1] = ind .. "  [" .. ser(k, depth + 1, seen, "") .. "] = " .. ser(val, depth + 1, seen, ind .. "  ") .. ","
+            end
+        end
+        out[#out + 1] = ind .. "}"
+        seen[v] = nil
+        return table.concat(out, "\n")
+    end
+    return "<" .. t .. ">"
+end
+
+local function dumpTree(root, maxDepth, maxLines, out)
+    local count = 0
+    local function walk(inst, depth)
+        if count >= maxLines then return end
+        count = count + 1
+        local extra = ""
+        if inst:IsA("BasePart") then extra = " pos=" .. tostring(inst.Position) end
+        if inst:IsA("ProximityPrompt") then extra = (" action=%q object=%q"):format(inst.ActionText, inst.ObjectText) end
+        out[#out + 1] = string.rep("  ", depth) .. inst.Name .. " (" .. inst.ClassName .. ")" .. extra
+        if depth < maxDepth then
+            for _, ch in ipairs(inst:GetChildren()) do walk(ch, depth + 1) end
+        end
+        if count % 400 == 0 then task.wait() end
+    end
+    walk(root, 0)
+end
+
+local function fmtV(v) return ("%.1f, %.1f, %.1f"):format(v.X, v.Y, v.Z) end
+local function dumpPosTree(root, maxDepth, maxLines, out)
+    local count = 0
+    local function walk(inst, depth, md)
+        if count >= maxLines then return end
+        count = count + 1
+        local extra = ""
+        if inst:IsA("Model") then
+            md = md + 1
+            local ok, pv = pcall(function() return inst:GetPivot().Position end)
+            if ok then extra = " pos=" .. fmtV(pv) end
+        elseif inst:IsA("BasePart") then extra = " pos=" .. fmtV(inst.Position)
+        elseif inst:IsA("Attachment") then extra = " pos=" .. fmtV(inst.WorldPosition)
+        elseif inst:IsA("ProximityPrompt") then
+            extra = (" PROMPT action=%q object=%q hold=%s dist=%s"):format(inst.ActionText, inst.ObjectText, tostring(inst.HoldDuration), tostring(inst.MaxActivationDistance))
+        end
+        local okA, attrs = pcall(function() return inst:GetAttributes() end)
+        if okA and next(attrs) then
+            local a = {}
+            for k, v in pairs(attrs) do a[#a + 1] = k .. "=" .. tostring(v) end
+            table.sort(a)
+            extra = extra .. " {" .. table.concat(a, ", ") .. "}"
+        end
+        out[#out + 1] = string.rep("  ", depth) .. inst.Name .. " (" .. inst.ClassName .. ")" .. extra
+        if depth < maxDepth and md <= 2 then
+            for _, ch in ipairs(inst:GetChildren()) do walk(ch, depth + 1, md) end
+        end
+        if count % 400 == 0 then task.wait() end
+    end
+    walk(root, 0, 0)
+end
+
+local function dumpInfoFiles()
+    local files = {}
+    local root = getRoot()
+    local l = {
+        "PlaceId = " .. tostring(game.PlaceId),
+        "JobId = " .. tostring(game.JobId),
+        "StreamingEnabled = " .. tostring(workspace.StreamingEnabled),
+        "Executor = " .. tostring(identifyexecutor and select(1, identifyexecutor()) or "?"),
+        "PlayerPos = " .. (root and fmtV(root.Position) or "?"),
+        "Time = " .. os.date("%Y-%m-%d %H:%M:%S"),
+        "decompile = " .. tostring(decompile ~= nil) .. " | hookmetamethod = " .. tostring(hookmetamethod ~= nil)
+            .. " | fireproximityprompt = " .. tostring(fireproximityprompt ~= nil),
+    }
+    files["info.txt"] = table.concat(l, "\n")
+
+    local p = {}
+    local function attrs(o, ind)
+        local okA, a = pcall(function() return o:GetAttributes() end)
+        if okA then for k, v in pairs(a) do p[#p + 1] = ind .. "@" .. k .. " = " .. tostring(v) end end
+    end
+    attrs(LP, "")
+    for _, ch in ipairs(LP:GetChildren()) do
+        if ch.Name ~= "PlayerGui" then
+            p[#p + 1] = ch.Name .. " (" .. ch.ClassName .. ")" .. (ch:IsA("ValueBase") and (" = " .. tostring(ch.Value)) or "")
+            attrs(ch, "  ")
+            for _, c2 in ipairs(ch:GetChildren()) do
+                p[#p + 1] = "  " .. c2.Name .. " (" .. c2.ClassName .. ")" .. (c2:IsA("ValueBase") and (" = " .. tostring(c2.Value)) or "")
+                attrs(c2, "    ")
+            end
+        end
+    end
+    local pg = LP:FindFirstChild("PlayerGui")
+    if pg then
+        p[#p + 1] = "-- PlayerGui"
+        for _, g in ipairs(pg:GetChildren()) do p[#p + 1] = g.Name .. " (" .. g.ClassName .. ")" end
+    end
+    files["player_structure.txt"] = table.concat(p, "\n")
+    return files
+end
+
+local function dumpScriptFiles()
+    local files = {}
+    if not decompile then
+        files["scripts_NOT_SUPPORTED.txt"] = "executor ไม่รองรับ decompile"
+        return files
+    end
+    local n, seenSrc = 0, {}
+    local function grab(inst)
+        if n >= 400 then return end
+        if inst:IsA("ModuleScript") or inst:IsA("LocalScript") then
+            local full = inst:GetFullName()
+
+            if full:find("^ReplicatedStorage%.Assets") then return end
+            n = n + 1
+            local ok, src = pcall(decompile, inst)
+            local name = ("src_" .. full:gsub("[^%w_%.]", "_") .. ".lua"):sub(1, 150)
+            if ok then
+                src = tostring(src):sub(1, 400000)
+                if seenSrc[src] then files[name] = "-- เหมือนกับ " .. seenSrc[src]
+                else seenSrc[src] = name; files[name] = src end
+            else
+                files[name] = "-- decompile failed: " .. tostring(src)
+            end
+            task.wait()
+        end
+    end
+    local ps = LP:FindFirstChild("PlayerScripts")
+    if ps then for _, d in ipairs(ps:GetDescendants()) do grab(d) end end
+    local pg = LP:FindFirstChild("PlayerGui")
+    if pg then for _, d in ipairs(pg:GetDescendants()) do grab(d) end end
+    for _, d in ipairs(RS:GetDescendants()) do grab(d) end
+    return files
+end
+
+local function dumpMapFiles()
+    local files = {}
+
+    local lines, groups, n = {}, {}, 0
+    for _, d in ipairs(workspace:GetDescendants()) do
+        if d:IsA("ProximityPrompt") then
+            n = n + 1
+            local pos = promptPos(d)
+            lines[#lines + 1] = ("%s | action=%q | object=%q | hold=%s | dist=%s | pos=%s"):format(
+                d:GetFullName(), d.ActionText, d.ObjectText, tostring(d.HoldDuration),
+                tostring(d.MaxActivationDistance), pos and tostring(pos) or "?")
+            local k = d.ObjectText .. " / " .. d.ActionText
+            groups[k] = (groups[k] or 0) + 1
+            if n % 300 == 0 then task.wait() end
+        end
+    end
+    files["map_prompts.txt"] = ("# Prompt ทั้งหมด: %d\n"):format(n) .. table.concat(lines, "\n")
+    local g = {}
+    for k, v in pairs(groups) do g[#g + 1] = ("%5d  %s"):format(v, k) end
+    table.sort(g, function(a, b) return a > b end)
+    files["map_prompt_groups.txt"] = table.concat(g, "\n")
+
+    local top = {}
+    for _, ch in ipairs(workspace:GetChildren()) do top[#top + 1] = ch.Name .. " (" .. ch.ClassName .. ")" end
+    table.sort(top)
+    files["map_workspace_top.txt"] = table.concat(top, "\n")
+    local sys = workspace:FindFirstChild("Systems")
+    if sys then
+        local out = {}
+        dumpTree(sys, 6, 6000, out)
+        files["map_systems_tree.txt"] = table.concat(out, "\n")
+        local pt = {}
+        dumpPosTree(sys, 8, 40000, pt)
+        files["map_systems_points.txt"] = table.concat(pt, "\n")
+    end
+    local mp = workspace:FindFirstChild("Map")
+    if mp then
+        local mt = {}
+        dumpPosTree(mp, 3, 8000, mt)
+        files["map_Map_tree.txt"] = table.concat(mt, "\n")
+    end
+
+    local sp = {}
+    for _, d in ipairs(workspace:GetDescendants()) do
+        if d:IsA("SpawnLocation") then sp[#sp + 1] = d:GetFullName() .. " pos=" .. tostring(d.Position) end
+    end
+    files["map_spawns.txt"] = table.concat(sp, "\n")
+    return files
+end
+
+local function dumpConfigFiles()
+    local files = {}
+
+    local r = {}
+    for _, d in ipairs(RS:GetDescendants()) do
+        if d:IsA("RemoteEvent") or d:IsA("RemoteFunction") or d:IsA("UnreliableRemoteEvent") then
+            r[#r + 1] = d.ClassName .. " " .. d:GetFullName()
+        end
+    end
+    table.sort(r)
+    files["remotes.txt"] = table.concat(r, "\n")
+    local rstree = {}
+    dumpTree(RS, 7, 12000, rstree)
+    files["replicatedstorage_tree.txt"] = table.concat(rstree, "\n")
+
+    local sys = RS:FindFirstChild("Systems")
+    if sys then
+        for _, path in ipairs({ { "Config" }, { "Modules", "Data" } }) do
+            local f = sys
+            for _, nm in ipairs(path) do f = f and f:FindFirstChild(nm) end
+            if f then
+                for _, m in ipairs(f:GetChildren()) do
+                    if m:IsA("ModuleScript") then
+                        local ok, res = pcall(require, m)
+                        files["config_" .. m.Name .. ".txt"] = ok and ser(res, 0, {}, "") or ("require failed: " .. tostring(res))
+                        task.wait()
+                    end
+                end
+            end
+        end
+    end
+    return files
+end
+
+local crcT
+local function crc32(s)
+    if not crcT then
+        crcT = {}
+        for i = 0, 255 do
+            local c = i
+            for _ = 1, 8 do
+                if bit32.band(c, 1) == 1 then c = bit32.bxor(bit32.rshift(c, 1), 0xEDB88320)
+                else c = bit32.rshift(c, 1) end
+            end
+            crcT[i] = c
+        end
+    end
+    local c, n, i, done = 0xFFFFFFFF, #s, 1, 0
+    while i <= n do
+        local j = math.min(i + 4095, n)
+        local bytes = { string.byte(s, i, j) }
+        for k = 1, #bytes do
+            c = bit32.bxor(crcT[bit32.band(bit32.bxor(c, bytes[k]), 0xFF)], bit32.rshift(c, 8))
+        end
+        done = done + (j - i + 1)
+        i = j + 1
+        if done > 400000 then done = 0; task.wait() end
+    end
+    return bit32.bxor(c, 0xFFFFFFFF)
+end
+
+local function buildZip(files, names)
+    local t = os.date("*t")
+    local dtime = bit32.bor(bit32.lshift(t.hour, 11), bit32.lshift(t.min, 5), math.floor(t.sec / 2))
+    local ddate = bit32.bor(bit32.lshift(math.max(t.year - 1980, 0), 9), bit32.lshift(t.month, 5), t.day)
+    local parts, entries, offset = {}, {}, 0
+    for _, name in ipairs(names) do
+        local data = files[name]
+        local crc = crc32(data)
+        local lh = string.pack("<I4I2I2I2I2I2I4I4I4I2I2", 0x04034b50, 20, 0x0800, 0, dtime, ddate, crc, #data, #data, #name, 0)
+        parts[#parts + 1] = lh; parts[#parts + 1] = name; parts[#parts + 1] = data
+        entries[#entries + 1] = { name = name, crc = crc, size = #data, offset = offset }
+        offset = offset + #lh + #name + #data
+    end
+    local cd = {}
+    for _, e in ipairs(entries) do
+        cd[#cd + 1] = string.pack("<I4I2I2I2I2I2I2I4I4I4I2I2I2I2I2I4I4",
+            0x02014b50, 20, 20, 0x0800, 0, dtime, ddate, e.crc, e.size, e.size, #e.name, 0, 0, 0, 0, 0, e.offset)
+        cd[#cd + 1] = e.name
+    end
+    local cdData = table.concat(cd)
+    local eocd = string.pack("<I4I2I2I2I2I4I4I2", 0x06054b50, 0, 0, #entries, #entries, #cdData, offset, 0)
+    return table.concat(parts) .. cdData .. eocd
+end
+
+local function multipart(fields, fileField, fname, data)
+    local boundary = "----MAHIRA" .. tostring(math.random(100000, 999999)) .. tostring(math.random(100000, 999999))
+    local out = {}
+    for k, v in pairs(fields) do
+        out[#out + 1] = "--" .. boundary .. "\r\nContent-Disposition: form-data; name=\"" .. k .. "\"\r\n\r\n" .. v .. "\r\n"
+    end
+    out[#out + 1] = "--" .. boundary .. "\r\nContent-Disposition: form-data; name=\"" .. fileField
+        .. "\"; filename=\"" .. fname .. "\"\r\nContent-Type: application/zip\r\n\r\n" .. data .. "\r\n--" .. boundary .. "--\r\n"
+    return table.concat(out), "multipart/form-data; boundary=" .. boundary
+end
+
+local function uploadZip(fname, zip)
+    local req = (syn and syn.request) or http_request or request or (http and http.request)
+    if not req then return nil, "executor ไม่มี request/http_request" end
+    local hosts = {
+        { name = "litterbox", url = "https://litterbox.catbox.moe/resources/internals/api.php",
+          fields = { reqtype = "fileupload", time = "72h" }, field = "fileToUpload", ua = "Mozilla/5.0" },
+        { name = "0x0.st", url = "https://0x0.st",
+          fields = { expires = "72" }, field = "file", ua = "curl/8.5.0" },
+    }
+    local errors = {}
+    for _, h in ipairs(hosts) do
+        local body, ctype = multipart(h.fields, h.field, fname, zip)
+        local ok, res = pcall(req, { Url = h.url, Method = "POST",
+            Headers = { ["Content-Type"] = ctype, ["User-Agent"] = h.ua }, Body = body })
+        if ok and type(res) == "table" then
+            local text = tostring(res.Body or ""):gsub("%s+$", "")
+            local code = res.StatusCode or res.Status
+            if (code == 200 or res.Success) and text:match("^https?://") then return text end
+            errors[#errors + 1] = h.name .. ": HTTP " .. tostring(code) .. " " .. text:sub(1, 60)
+        else
+            errors[#errors + 1] = h.name .. ": " .. tostring(res):sub(1, 60)
+        end
+    end
+    return nil, table.concat(errors, " | ")
+end
+
+local function saveFiles(files, tag)
+    local names = {}
+    for name in pairs(files) do names[#names + 1] = name end
+    table.sort(names)
+
+    if writefile and makefolder then
+        pcall(function() if isfolder and not isfolder(DUMP_DIR) then makefolder(DUMP_DIR) end end)
+        for _, name in ipairs(names) do pcall(writefile, DUMP_DIR .. "/" .. name, files[name]) end
+    end
+
+    local okz, zip = pcall(buildZip, files, names)
+    if not okz then return "สร้าง ZIP ไม่สำเร็จ: " .. tostring(zip) end
+    local zname = "MAHIRA_" .. (tag or "DUMP") .. "_" .. tostring(game.PlaceId) .. ".zip"
+    local saved = writefile and pcall(writefile, zname, zip)
+
+    local link, err = uploadZip(zname, zip)
+    if link then
+        pcall(function() if writefile then writefile("MAHIRA_" .. (tag or "DUMP") .. "_" .. tostring(game.PlaceId) .. "_link.txt", link) end end)
+        local copied = setclipboard and pcall(setclipboard, link)
+        print("[MAHIRA] LINK: " .. link)
+        return ("ได้ลิงก์ดาวน์โหลด ZIP แล้ว (อยู่ ~72 ชม.)\n%s%s"):format(link, copied and "\n(คัดลอกลงคลิปบอร์ดแล้ว)" or "")
+    end
+    return ("อัปโหลดไม่สำเร็จ: %s%s"):format(err or "?", saved and ("\nไฟล์ ZIP อยู่ที่ workspace/" .. zname) or "")
+end
+
+local spyLog, spyOn, spyHooked = {}, false, false
+local function spyLine(tag, text)
+    if #spyLog >= 8000 then return end
+    local r = getRoot()
+    spyLog[#spyLog + 1] = ("[%.2f] %s pos=%s | %s"):format(os.clock(), tag, r and fmtV(r.Position) or "?", text)
+end
+local function installSpy()
+    if spyHooked then return true end
+    if not (hookmetamethod and getnamecallmethod) then return false end
+    local old
+    local function handler(self, ...)
+        local m = getnamecallmethod()
+        if spyOn and (m == "FireServer" or m == "InvokeServer") and typeof(self) == "Instance"
+            and (not checkcaller or not checkcaller()) then
+            local args = table.pack(...)
+            pcall(function()
+                local parts = {}
+                for i = 1, args.n do parts[i] = ser(args[i], 0, {}, "") end
+                spyLine("REMOTE", self:GetFullName() .. ":" .. m .. "(" .. table.concat(parts, ", ") .. ")")
+            end)
+        end
+        return old(self, ...)
+    end
+    old = hookmetamethod(game, "__namecall", newcclosure and newcclosure(handler) or handler)
+    spyHooked = true
+    return true
+end
+bind(PPS.PromptTriggered, function(p)
+    if spyOn then
+        pcall(function()
+            local pp = promptPos(p)
+            spyLine("PROMPT", ("%s | action=%q object=%q | at=%s"):format(p:GetFullName(), p.ActionText, p.ObjectText, pp and fmtV(pp) or "?"))
+        end)
+    end
+end)
+
+do
+    local c = newCard(tDump.left, "ดึงข้อมูลจากเกมจริง")
+    local status = c:Label("ดึงข้อมูลจากเกมตอนเล่น เสร็จแล้วจะรวมเป็น ZIP และได้ลิ้งดาวน์โหลด (คัดลอกให้อัตโนมัติ) ยืนใกล้จุดฟาร์ม/แปรรูป/ขายก่อนดึง เพราะเกมโหลดแมพเป็นช่วงๆ")
+    local busy = false
+    local function run(label, fn, tag)
+        if busy then return end
+        busy = true; status.Text = label .. " ..."
+        task.spawn(function()
+            local ok, res = pcall(function()
+                local files = fn()
+                return saveFiles(files, tag)
+            end)
+            status.Text = ok and res or ("ผิดพลาด: " .. tostring(res))
+            notify(ok and "ดึงข้อมูลเสร็จแล้ว" or "ดึงข้อมูลไม่สำเร็จ")
+            busy = false
+        end)
+    end
+    local function merge(...)
+        local out = {}
+        for _, t in ipairs({ ... }) do for k, v in pairs(t) do out[k] = v end end
+        return out
+    end
+    c:Button("ดึงแมพทั้งหมด (พิกัดทุกจุด / Prompt / Systems)", function() run("กำลังดึงแมพ", dumpMapFiles, "MAP") end)
+    c:Button("ดึงข้อมูลเกมทั้งหมด (Config / Remotes / Items / ผู้เล่น)", function()
+        run("กำลังดึงข้อมูลเกม", function() return merge(dumpConfigFiles(), dumpInfoFiles()) end, "DATA")
+    end)
+    c:Button("ดึงสคริปต์เกม (ต้องรองรับ decompile)", function() run("กำลังดึงสคริปต์", dumpScriptFiles, "SCRIPTS") end)
+    c:Button("ดึงทั้งหมด → ZIP เดียว + ลิ้งดาวน์โหลด", function()
+        run("กำลังดึงทั้งหมด", function()
+            local a = dumpMapFiles()
+            local b = dumpConfigFiles()
+            local i = dumpInfoFiles()
+            local sc = decompile and dumpScriptFiles() or {}
+            return merge(a, b, i, sc)
+        end, "ALL")
+    end)
+
+    local sp = newCard(tDump.left, "ตัวดักจับ Remote / Prompt")
+    local spStatus = sp:Label("เปิดแล้วเล่นเองหนึ่งรอบ: เบิกรถ -> ใส่ของท้ายรถ -> ขนไปแปรรูป/ขาย แล้วกดหยุด&ส่งออก")
+    sp:Toggle("เริ่มบันทึก", "จดทุกคำสั่งที่ส่งไปเซิร์ฟเวอร์ + Prompt ที่กด พร้อมตำแหน่งตัวละคร", false, function(v)
+        if v then
+            if not installSpy() then
+                notify("executor ไม่รองรับ hookmetamethod"); spyOn = false
+                spStatus.Text = "บันทึก Remote ไม่ได้ (ไม่มี hookmetamethod) — Prompt ที่กดยังบันทึกได้"
+            end
+            spyOn = true
+        else
+            spyOn = false
+        end
+    end)
+    sp:Button("หยุด & ส่งออกเป็น ZIP + ลิ้ง", function()
+        spyOn = false
+        local n = #spyLog
+        if n == 0 then notify("ยังไม่มีข้อมูลที่บันทึก"); return end
+        local log = table.concat(spyLog, "\n")
+        spyLog = {}
+        run(("ส่งออก %d รายการ"):format(n), function() return { ["remote_prompt_log.txt"] = log } end, "SPY")
+    end)
+    sp:Button("ล้างบันทึก", function() spyLog = {}; notify("ล้างแล้ว") end)
+
+    local e = newCard(tDump.right, "ไฟล์ที่ได้")
+    e:Label("map_systems_points: พิกัดทุกจุดใน Systems (ฟาร์ม/แปรรูป/ขาย/จุดเบิกรถ) + attribute")
+    e:Label("map_prompts / map_prompt_groups: Prompt ที่โหลดอยู่ตอนนี้ (ใช้หาจุดฟาร์ม)")
+    e:Label("map_Map_tree: โครง workspace.Map | info / player_structure: ข้อมูลเซิร์ฟเวอร์และโครงข้อมูลผู้เล่น (ไม่มีชื่อ/ไอดี)")
+    e:Label("config_*: ข้อมูลจาก Config/Data | remotes / replicatedstorage_tree: โครง ReplicatedStorage")
+    e:Label("src_*: โค้ดสคริปต์ที่ decompile ได้ | remote_prompt_log: คำสั่งที่ส่งไปเซิร์ฟเวอร์ตอนเล่นจริง")
+end
+
+do
+    local c = newCard(tKeys.left, "ปุ่มลัด")
+    c:Keybind("เปิด/ปิด UI", S.Keys.UI, function(k) if k then S.Keys.UI = k end end)
+    c:Keybind("Noclip", S.Keys.Noclip, function(k) if k then S.Keys.Noclip = k end end)
+    local e = newCard(tKeys.right, "หมายเหตุ")
+    e:Label("กดที่ปุ่มแล้วกดคีย์ที่ต้องการ (Esc = ยกเลิก)")
+    e:Label("บนมือถือใช้ปุ่มกลมไอคอนลูกศรเพื่อเปิด/ปิดเมนู")
+end
+bind(UIS.InputBegan, function(i, gp)
+    if gp then return end
+    if i.KeyCode == S.Keys.UI then setVisible(not main.Visible) end
+    if i.KeyCode == S.Keys.Noclip then noclipToggleObj.Set(not noclipToggleObj.Get()) end
+end)
+
+local function unload()
+    alive = false
+    spyOn = false
+    if AFStop then pcall(AFStop) end
+    if TPStop then pcall(TPStop) end
+    for _, c in ipairs(conns) do pcall(function() c:Disconnect() end) end
+    for p in pairs(espObjs) do clearESP(p) end
+    if gui then gui:Destroy() end
+    if getgenv then getgenv().MAHIRA_LOADED = nil end
+end
+do
+    local c = newCard(tSet.left, "UI")
+    c:Slider("ขนาด UI", 60, 130, 100, " %", function(v) userScale = v / 100; fitScale(userScale) end)
+    c:Toggle("Anti AFK", "กันหลุดจากการไม่ขยับ", S.AntiAFK, function(v) S.AntiAFK = v end)
+    local e = newCard(tSet.right, "ระบบ")
+    e:Button("ปิดสคริปต์ (Unload)", unload)
+end
+bind(LP.Idled, function()
+    if S.AntiAFK then
+        pcall(function()
+            VirtualUser:CaptureController()
+            VirtualUser:ClickButton2(Vector2.new())
+        end)
+    end
+end)
+bind(bClose.MouseButton1Click, unload)
+
+if getgenv then
+    getgenv().MAHIRA_LOADED = true
+    getgenv().MAHIRA_UNLOAD = unload
+end
+
+selectTab("หน้าหลัก")
+notify("MAHIRA X HUB โหลดสำเร็จ")
